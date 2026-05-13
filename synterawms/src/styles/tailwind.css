@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f4f6f8;
+  --foreground: #111827;
+  --primary: #1e4d2b;
+  --primary-foreground: #ffffff;
+  --secondary: #2d6a3f;
+  --secondary-foreground: #ffffff;
+  --accent: #e8621a;
+  --accent-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #1e4d2b;
+  --radius: 6px;
+  --font-sans: var(--font-plus-jakarta-sans), sans-serif;
+
+  --sidebar-bg: #0d1f14;
+  --sidebar-hover: #1a3320;
+  --sidebar-active: #2d5a3d;
+  --sidebar-text: #a8c4b0;
+  --sidebar-text-active: #ffffff;
+  --sidebar-border: #1e3326;
+
+  --success: #4caf50;
+  --success-bg: #f0fdf4;
+  --warning: #f59e0b;
+  --warning-bg: #fffbeb;
+  --danger: #ef4444;
+  --danger-bg: #fef2f2;
+  --info: #3b82f6;
+  --info-bg: #eff6ff;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  h1, h2, h3, h4, h5, h6, p {
+    margin: 0;
+  }
+}
+
+@layer utilities {
+  .sidebar-bg { background-color: var(--sidebar-bg); }
+  .sidebar-hover { background-color: var(--sidebar-hover); }
+  .sidebar-active-bg { background-color: var(--sidebar-active); }
+  .sidebar-text { color: var(--sidebar-text); }
+  .sidebar-text-active { color: var(--sidebar-text-active); }
+  .sidebar-border { border-color: var(--sidebar-border); }
+
+  .text-success { color: var(--success); }
+  .text-warning { color: var(--warning); }
+  .text-danger { color: var(--danger); }
+  .text-info { color: var(--info); }
+
+  .bg-success-soft { background-color: var(--success-bg); }
+  .bg-warning-soft { background-color: var(--warning-bg); }
+  .bg-danger-soft { background-color: var(--danger-bg); }
+  .bg-info-soft { background-color: var(--info-bg); }
+
+  .font-tabular { font-variant-numeric: tabular-nums; }
+
+  .submit-gradient {
+    background: linear-gradient(135deg, #7ab648 0%, #b8d832 50%, #e8c820 100%);
+  }
+
+  .submit-gradient:hover {
+    background: linear-gradient(135deg, #6aa038 0%, #a8c822 50%, #d8b810 100%);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+  .transition-sidebar { transition: width 300ms ease, min-width 300ms ease; }
+  .transition-opacity-fast { transition: opacity 150ms ease; }
+
+  .row-hover:hover { background-color: #f8fafc; }
+  .row-hover:hover .row-actions { opacity: 1; }
+  .row-actions { opacity: 1; transition: opacity 150ms ease; }
+
+  .animate-fade-in {
+    animation: fadeIn 200ms ease forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-pulse-highlight {
+    animation: pulseHighlight 600ms ease;
+  }
+
+  @keyframes pulseHighlight {
+    0% { background-color: transparent; }
+    30% { background-color: #fef9c3; }
+    100% { background-color: transparent; }
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold text-white transition-all duration-150 active:scale-95;
+    background-color: var(--primary);
+  }
+  .btn-primary:hover { background-color: var(--secondary); }
+
+  .btn-accent {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold text-white transition-all duration-150 active:scale-95;
+    background-color: var(--accent);
+  }
+  .btn-accent:hover { opacity: 0.9; }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-all duration-150 active:scale-95;
+    color: var(--muted-foreground);
+  }
+  .btn-ghost:hover { background-color: var(--muted); }
+
+  .form-input {
+    @apply w-full px-3 py-2 text-sm rounded border bg-white outline-none transition-all duration-150;
+    border-color: var(--border);
+    color: var(--foreground);
+  }
+  .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30,77,43,0.1); }
+  .form-input::placeholder { color: var(--muted-foreground); }
+
+  .form-label {
+    @apply block text-sm font-semibold mb-1;
+    color: var(--foreground);
+  }
+
+  .card {
+    @apply rounded-lg border bg-white;
+    border-color: var(--border);
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold;
+  }
+}
