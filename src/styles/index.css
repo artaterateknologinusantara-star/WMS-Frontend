@@ -1,0 +1,29 @@
+@import './tailwind.css';
+
+/* Print styles for pallet labels */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print\\:border, .print\\:border-black, .print\\:bg-white {
+    visibility: visible;
+  }
+  .print\\:border {
+    border: 1px solid black !important;
+  }
+  .print\\:border-black {
+    border-color: black !important;
+  }
+  .print\\:bg-white {
+    background-color: white !important;
+  }
+  /* Hide modal footer and other elements */
+  .modal-footer, .modal-header {
+    display: none !important;
+  }
+  /* Ensure each pallet label is on a new page or properly spaced */
+  .border {
+    page-break-inside: avoid;
+    margin-bottom: 20px;
+  }
+}
