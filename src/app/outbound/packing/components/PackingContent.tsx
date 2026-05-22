@@ -67,7 +67,7 @@ export default function PackingContent() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-border px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+      <div className="bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="text-lg font-bold text-foreground">Packing</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Verify and pack picked items before dispatch</p>
@@ -89,7 +89,7 @@ export default function PackingContent() {
         </div>
       </div>
 
-      <div className="px-8 py-6 max-w-screen-2xl">
+      <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 max-w-screen-2xl">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <div className="relative flex-1 min-w-[200px] max-w-sm">

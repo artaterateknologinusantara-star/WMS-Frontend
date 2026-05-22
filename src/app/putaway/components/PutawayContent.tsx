@@ -415,13 +415,13 @@ export default function PutawayContent() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-border px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+      <div className="bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="text-lg font-bold text-foreground">Putaway Tasks</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Assign pallets to bin locations and confirm via barcode scan</p>
+          <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">Assign pallets to bin locations and confirm via barcode scan</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden sm:flex items-center gap-4 text-xs">
             <span className="text-muted-foreground">Pending: <strong className="text-danger">{summaryStats.pending}</strong></span>
             <span className="text-muted-foreground">Assigned: <strong className="text-info">{summaryStats.assigned}</strong></span>
           </div>
@@ -431,16 +431,16 @@ export default function PutawayContent() {
             className="btn-ghost text-xs border border-border flex items-center gap-1.5 disabled:opacity-50"
           >
             {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button className="btn-ghost text-xs border border-border flex items-center gap-1.5">
             <Download size={13} />
-            Export
+            <span className="hidden sm:inline">Export</span>
           </button>
         </div>
       </div>
 
-      <div className="px-8 py-6 max-w-screen-2xl">
+      <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 max-w-screen-2xl">
         {/* Load error banner */}
         {loadError && (
           <div className="mb-4 bg-danger/10 border border-danger rounded-lg px-4 py-3 text-sm text-danger flex items-center gap-2">

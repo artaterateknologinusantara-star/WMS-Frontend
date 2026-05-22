@@ -49,7 +49,7 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-5">
-            <AppLogo size={52} />
+            <AppLogo size={72} />
             <div className="text-left">
               <p className="text-white font-bold text-xl tracking-tight">SYNTERA WMS</p>
               <p className="text-xs" style={{ color: '#64748b' }}>Warehouse Management System</p>

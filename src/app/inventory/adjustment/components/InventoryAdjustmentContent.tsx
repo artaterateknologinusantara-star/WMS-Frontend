@@ -366,16 +366,16 @@ export default function InventoryAdjustmentContent() {
       )}
 
       {/* ── Page Header ── */}
-      <div className="bg-white border-b border-border px-8 py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 sticky top-0 z-10">
         <h1 className="text-lg font-bold text-foreground">Inventory Adjustment</h1>
         <p className="text-xs text-muted-foreground mt-0.5">Manual stock correction with approval workflow and audit trail</p>
       </div>
 
-      <div className="px-6 py-5 max-w-screen-xl">
-        <div className="grid grid-cols-3 gap-5">
+      <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 max-w-screen-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
 
           {/* ── Left: Form ── */}
-          <div className="col-span-1">
+          <div className="col-span-1 lg:col-span-1">
             <div className="card p-4">
               <h2 className="text-sm font-bold text-foreground mb-3 pb-3 border-b border-border">New Adjustment</h2>
 
@@ -486,7 +486,7 @@ export default function InventoryAdjustmentContent() {
           </div>
 
           {/* ── Right: History table ── */}
-          <div className="col-span-2">
+          <div className="col-span-1 lg:col-span-2">
             <div className="card overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <div>
@@ -508,19 +508,19 @@ export default function InventoryAdjustmentContent() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[780px]">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="bg-muted border-b border-border">
-                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Adj. No</th>
-                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
-                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">SKU / Pallet</th>
-                      <th className="text-right px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Prev</th>
-                      <th className="text-right px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">New</th>
-                      <th className="text-right px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Diff</th>
-                      <th className="text-left px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Requested At</th>
-                      <th className="text-center px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                      <th className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[148px]">Adj. No</th>
+                      <th className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[78px]">Type</th>
+                      <th className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">SKU / Pallet</th>
+                      <th className="text-right px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-10">Prev</th>
+                      <th className="text-right px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-10">New</th>
+                      <th className="text-right px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-10">Diff</th>
+                      <th className="text-left px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[92px]">Requested</th>
+                      <th className="text-center px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[82px]">Status</th>
                       {isAdmin && (
-                        <th className="text-center px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action</th>
+                        <th className="text-center px-2 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[98px]">Action</th>
                       )}
                     </tr>
                   </thead>
@@ -529,7 +529,7 @@ export default function InventoryAdjustmentContent() {
                       Array.from({ length: 5 }, (_, i) => (
                         <tr key={i} className="border-b border-border">
                           {Array.from({ length: isAdmin ? 9 : 8 }, (_, j) => (
-                            <td key={j} className="px-3 py-2.5">
+                            <td key={j} className="px-2 py-2.5">
                               <div className="h-3.5 bg-muted animate-pulse rounded" />
                             </td>
                           ))}
@@ -537,7 +537,7 @@ export default function InventoryAdjustmentContent() {
                       ))
                     ) : paginatedHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin ? 9 : 8} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                        <td colSpan={isAdmin ? 9 : 8} className="px-2 py-10 text-center text-sm text-muted-foreground">
                           No adjustment records found.
                         </td>
                       </tr>
@@ -547,50 +547,52 @@ export default function InventoryAdjustmentContent() {
                         const badge = statusBadge[statusKey] ?? statusBadge.pending;
                         const qtyDiff = (rec.newQty ?? 0) - (rec.prevQty ?? 0);
                         const isPending = statusKey === 'pending';
+                        const dtParts = (rec.requestedAt || rec.createdAt || '').split(' ');
 
                         return (
                           <tr key={rec.id} className="border-b border-border last:border-0 row-hover">
                             {/* Adj. No */}
-                            <td className="px-3 py-2.5 text-xs font-semibold text-info font-tabular whitespace-nowrap">
+                            <td className="px-2 py-2.5 text-xs font-semibold text-info font-tabular whitespace-nowrap">
                               {rec.adjustmentNo}
                             </td>
 
                             {/* Type */}
-                            <td className="px-3 py-2.5 text-xs text-foreground max-w-[120px] truncate" title={rec.adjustmentType}>
+                            <td className="px-2 py-2.5 text-xs text-foreground truncate max-w-[78px]" title={rec.adjustmentType}>
                               {rec.adjustmentType}
                             </td>
 
                             {/* SKU / Pallet */}
-                            <td className="px-3 py-2.5 text-xs">
+                            <td className="px-2 py-2.5 text-xs">
                               <span className="font-semibold text-foreground font-tabular">{rec.skuNumber}</span>
                               {rec.palletId && (
-                                <p className="text-muted-foreground text-xs font-tabular truncate max-w-[110px]">{rec.palletId}</p>
+                                <p className="text-muted-foreground text-[10px] font-tabular truncate max-w-[100px]">{rec.palletId}</p>
                               )}
                             </td>
 
                             {/* Prev Qty */}
-                            <td className="px-3 py-2.5 text-xs font-tabular text-right text-muted-foreground">
+                            <td className="px-2 py-2.5 text-xs font-tabular text-right text-muted-foreground">
                               {rec.prevQty}
                             </td>
 
                             {/* New Qty */}
-                            <td className={`px-3 py-2.5 text-xs font-tabular text-right font-semibold ${qtyDiff > 0 ? 'text-success' : qtyDiff < 0 ? 'text-danger' : 'text-foreground'}`}>
+                            <td className={`px-2 py-2.5 text-xs font-tabular text-right font-semibold ${qtyDiff > 0 ? 'text-success' : qtyDiff < 0 ? 'text-danger' : 'text-foreground'}`}>
                               {rec.newQty}
                             </td>
 
                             {/* Diff */}
-                            <td className={`px-3 py-2.5 text-xs font-tabular text-right font-semibold ${qtyDiff > 0 ? 'text-success' : qtyDiff < 0 ? 'text-danger' : 'text-muted-foreground'}`}>
+                            <td className={`px-2 py-2.5 text-xs font-tabular text-right font-semibold ${qtyDiff > 0 ? 'text-success' : qtyDiff < 0 ? 'text-danger' : 'text-muted-foreground'}`}>
                               {qtyDiff > 0 ? '+' : ''}{qtyDiff}
                             </td>
 
-                            {/* Requested At */}
-                            <td className="px-3 py-2.5 text-xs text-muted-foreground font-tabular whitespace-nowrap">
-                              {rec.requestedAt || rec.createdAt}
+                            {/* Requested At — date + time stacked */}
+                            <td className="px-2 py-2.5 text-xs text-muted-foreground font-tabular">
+                              <div>{dtParts[0] ?? '—'}</div>
+                              {dtParts[1] && <div className="text-[10px] opacity-70">{dtParts[1]}</div>}
                             </td>
 
                             {/* Status badge */}
-                            <td className="px-3 py-2.5 text-center">
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium border whitespace-nowrap ${badge.classes}`}>
+                            <td className="px-2 py-2.5 text-center">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border whitespace-nowrap ${badge.classes}`}>
                                 {badge.icon}
                                 {badge.label}
                               </span>
@@ -598,23 +600,23 @@ export default function InventoryAdjustmentContent() {
 
                             {/* Action (Admin + Pending only) */}
                             {isAdmin && (
-                              <td className="px-3 py-2.5 text-center">
+                              <td className="px-2 py-2.5 text-center">
                                 {isPending ? (
                                   <div className="flex items-center justify-center gap-1">
                                     <button
                                       onClick={() => openApprove(rec)}
                                       title="Approve"
-                                      className="inline-flex items-center gap-1 text-xs font-semibold text-success hover:bg-success-soft px-2 py-1 rounded transition-colors whitespace-nowrap border border-green-200"
+                                      className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-success hover:bg-success-soft px-1.5 py-0.5 rounded transition-colors whitespace-nowrap border border-green-200"
                                     >
-                                      <CheckCircle2 size={11} />
+                                      <CheckCircle2 size={10} />
                                       Approve
                                     </button>
                                     <button
                                       onClick={() => openReject(rec)}
                                       title="Reject"
-                                      className="inline-flex items-center gap-1 text-xs font-semibold text-danger hover:bg-danger-soft px-2 py-1 rounded transition-colors whitespace-nowrap border border-red-200"
+                                      className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-danger hover:bg-danger-soft px-1.5 py-0.5 rounded transition-colors whitespace-nowrap border border-red-200"
                                     >
-                                      <XCircle size={11} />
+                                      <XCircle size={10} />
                                       Reject
                                     </button>
                                   </div>

@@ -87,13 +87,13 @@ export default function DispatchContent() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-border px-8 py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 sticky top-0 z-10">
         <h1 className="text-lg font-bold text-foreground">Dispatch</h1>
         <p className="text-xs text-muted-foreground mt-0.5">Confirm outbound shipment and generate BAST document</p>
       </div>
 
-      <div className="px-8 py-6 max-w-screen-xl">
-        <div className="grid grid-cols-3 gap-6">
+      <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 max-w-screen-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* Dispatch Form */}
           <div className="col-span-1">
             <div className="card p-5">

@@ -107,7 +107,7 @@ export default function InboundReceivingContent() {
     <div className="min-h-screen bg-white relative">
       <form onSubmit={handleSubmit(onSubmit)}>
         {/* Page Header */}
-        <div className="sticky top-0 z-10 bg-white border-b border-border px-8 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-foreground">Inbound Receiving</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Log incoming shipments and generate pallet IDs</p>
@@ -122,7 +122,7 @@ export default function InboundReceivingContent() {
           </div>
         </div>
 
-        <div className="px-8 py-6 max-w-screen-2xl">
+        <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 max-w-screen-2xl">
           {/* General Information */}
           <GeneralInfoForm register={register} errors={errors} />
 
@@ -137,7 +137,7 @@ export default function InboundReceivingContent() {
         </div>
 
         {/* Sticky Submit Button */}
-        <div className="fixed bottom-0 left-[260px] right-0 bg-white border-t border-border px-8 py-4 z-20">
+        <div className="fixed bottom-0 left-0 lg:left-[260px] right-0 bg-white border-t border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 z-20">
           <button
             type="submit"
             disabled={isSubmitting}

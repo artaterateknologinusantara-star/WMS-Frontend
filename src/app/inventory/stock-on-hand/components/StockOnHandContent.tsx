@@ -120,7 +120,7 @@ const filtered = stockData.filter(s => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-border px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+      <div className="bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <h1 className="text-lg font-bold text-foreground">Stock On Hand</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Real-time inventory stock monitoring</p>
@@ -128,23 +128,23 @@ const filtered = stockData.filter(s => {
         <div className="flex items-center gap-2">
           <button onClick={() => fetchInventory(true)} disabled={refreshing} className="btn-ghost text-xs border border-border flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
+            <span className="hidden sm:inline">{refreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
           <button className="btn-ghost text-xs border border-border flex items-center gap-1.5">
             <Download size={13} />
-            Export
+            <span className="hidden sm:inline">Export</span>
           </button>
         </div>
       </div>
 
-      <div className="px-8 py-6 max-w-screen-2xl">
+      <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 max-w-screen-2xl">
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
         {/* Summary Cards */}
-        <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 lg:gap-4 mb-6">
           {[
             { label: 'Total SKU', value: totalSKU, color: 'text-foreground' },
             { label: 'Total Pallet', value: totalPallet, color: 'text-info' },

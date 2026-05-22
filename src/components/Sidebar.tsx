@@ -5,7 +5,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import AppLogo from '@/components/ui/AppLogo';
 import { useAuth } from '@/lib/context/AuthContext';
-import { LayoutDashboard, Boxes, TruckIcon, BarChart3, Database, Settings, ChevronDown, ChevronRight, Search, Headphones, Circle, ArrowDownToLine, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard, Boxes, TruckIcon, BarChart3, Database, Settings,
+  ChevronDown, ChevronRight, Search, Headphones, Circle,
+  ArrowDownToLine, LogOut, X,
+} from 'lucide-react';
 
 interface NavChild {
   label: string;
@@ -19,6 +23,11 @@ interface NavItem {
   icon: React.ReactNode;
   badge?: number;
   children?: NavChild[];
+}
+
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const navItems: NavItem[] = [
@@ -93,7 +102,7 @@ function getActiveParent(pathname: string): string | null {
   return null;
 }
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -109,13 +118,16 @@ export default function Sidebar() {
     ? user.fullName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'SA';
 
-  // Auto-open the active module submenu on mount / route change
   useEffect(() => {
     const active = getActiveParent(pathname);
     if (active) setExpandedItem(active);
   }, [pathname]);
 
-  // Accordion: clicking a module opens it and closes any other
+  // Close sidebar on mobile when navigating
+  const handleNavClick = () => {
+    if (onClose) onClose();
+  };
+
   const toggleExpand = (label: string) => {
     setExpandedItem(prev => (prev === label ? null : label));
   };
@@ -132,11 +144,20 @@ export default function Sidebar() {
     : navItems;
 
   return (
-    <aside className="sidebar-bg flex flex-col h-screen w-[260px] min-w-[260px] border-r sidebar-border overflow-hidden">
-      {/* Logo */}
+    <aside
+      className={[
+        'sidebar-bg flex flex-col h-full w-[260px] min-w-[260px] border-r sidebar-border overflow-hidden',
+        // Mobile: fixed drawer sliding in from left
+        'fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out',
+        // Desktop: always visible, relative positioning
+        'lg:relative lg:translate-x-0 lg:z-auto',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+      ].join(' ')}
+    >
+      {/* Logo + mobile close button */}
       <div className="flex items-center gap-3 px-4 py-4 border-b sidebar-border">
-        <div className="flex items-center gap-2">
-          <AppLogo size={36} />
+        <div className="flex items-center gap-2 flex-1">
+          <AppLogo size={40} />
           <div className="flex flex-col leading-tight">
             <span className="text-white font-bold text-sm tracking-tight">DARING MANDIRI</span>
             <div className="flex items-center gap-1">
@@ -145,6 +166,14 @@ export default function Sidebar() {
             <span className="text-xs sidebar-text" style={{ fontSize: '10px' }}>Warehouse Management System</span>
           </div>
         </div>
+        {/* Close button — only visible on mobile */}
+        <button
+          onClick={onClose}
+          className="lg:hidden p-1 rounded transition-colors sidebar-text hover:text-white flex-shrink-0"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Profile */}
@@ -202,9 +231,11 @@ export default function Sidebar() {
               <Link
                 key={`nav-${item.label}`}
                 href={item.href!}
+                onClick={handleNavClick}
                 className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150 mb-0.5 ${
                   isActive
-                    ? 'sidebar-active-bg sidebar-text-active' :'sidebar-text hover:sidebar-hover hover:text-white'
+                    ? 'sidebar-active-bg sidebar-text-active'
+                    : 'sidebar-text hover:sidebar-hover hover:text-white'
                 }`}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
@@ -224,7 +255,8 @@ export default function Sidebar() {
                 onClick={() => toggleExpand(item.label)}
                 className={`flex items-center gap-3 px-4 py-2.5 mx-2 rounded text-sm font-medium transition-all duration-150 mb-0.5 w-full text-left ${
                   childActive
-                    ? 'sidebar-active-bg sidebar-text-active' :'sidebar-text hover:sidebar-hover hover:text-white'
+                    ? 'sidebar-active-bg sidebar-text-active'
+                    : 'sidebar-text hover:sidebar-hover hover:text-white'
                 }`}
                 style={{ background: childActive ? 'var(--sidebar-active)' : undefined }}
               >
@@ -243,7 +275,6 @@ export default function Sidebar() {
                 </span>
               </button>
 
-              {/* Submenu with smooth height transition */}
               <div
                 className="overflow-hidden transition-all duration-200 ease-in-out"
                 style={{
@@ -259,9 +290,11 @@ export default function Sidebar() {
                       <Link
                         key={`child-${item.label}-${child.label}`}
                         href={child.href}
+                        onClick={handleNavClick}
                         className={`flex items-center gap-3 px-4 py-2 rounded text-sm transition-all duration-150 mb-0.5 ${
                           childIsActive
-                            ? 'text-white font-semibold' :'sidebar-text hover:text-white font-medium'
+                            ? 'text-white font-semibold'
+                            : 'sidebar-text hover:text-white font-medium'
                         }`}
                       >
                         <span className="flex-shrink-0 mt-0.5">{child.icon}</span>
