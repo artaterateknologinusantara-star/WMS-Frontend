@@ -120,7 +120,7 @@ export default function PutawayContent() {
   const [binOptions, setBinOptions] = useState<BinOption[]>([]);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/binlocation`)
+    fetch(`${API_BASE_URL}/binlocation?available=true`)
       .then(r => r.ok ? r.json() : null)
       .then(p => { if (Array.isArray(p?.data)) setBinOptions(p.data); })
       .catch(() => {});
@@ -632,6 +632,7 @@ export default function PutawayContent() {
       <PutawayAssignModal
         open={assignModal.open}
         task={assignModal.task}
+        binOptions={binOptions}
         onClose={() => setAssignModal({ open: false, task: null })}
         onAssign={handleAssign}
       />

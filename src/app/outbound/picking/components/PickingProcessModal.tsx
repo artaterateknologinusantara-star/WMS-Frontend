@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ScanLine, CheckCircle2, AlertTriangle, Package, MapPin, Hash } from 'lucide-react';
-import { confirmPick, type PickingListItem } from '@/lib/services/picking.service';
+import { X, ScanLine, CheckCircle2, AlertTriangle, Package, MapPin, Hash, Warehouse } from 'lucide-react';
+import {
+  confirmPick,
+  getStagingLocations,
+  type PickingListItem,
+  type ConfirmPickRequest,
+  type StagingLocation,
+} from '@/lib/services/picking.service';
 
 interface Props {
   item: PickingListItem;
@@ -14,20 +20,26 @@ interface FieldError {
   palletId?: string;
   binCode?: string;
   pickedQty?: string;
+  stagingLocation?: string;
 }
 
 export default function PickingProcessModal({ item, onClose, onConfirmed }: Props) {
-  const [scannedPallet, setScannedPallet] = useState('');
-  const [scannedBin, setScannedBin] = useState('');
-  const [pickedQty, setPickedQty] = useState(String(item.requestedQty));
-  const [notes, setNotes] = useState('');
-  const [errors, setErrors] = useState<FieldError>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [apiError, setApiError] = useState('');
+  const [scannedPallet, setScannedPallet]         = useState('');
+  const [scannedBin, setScannedBin]               = useState('');
+  const [pickedQty, setPickedQty]                 = useState(String(item.requestedQty));
+  const [stagingLocationCode, setStagingLocation] = useState('');
+  const [notes, setNotes]                         = useState('');
+  const [errors, setErrors]                       = useState<FieldError>({});
+  const [submitting, setSubmitting]               = useState(false);
+  const [apiError, setApiError]                   = useState('');
+  const [stagingOptions, setStagingOptions]        = useState<StagingLocation[]>([]);
   const palletRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     palletRef.current?.focus();
+    getStagingLocations()
+      .then(setStagingOptions)
+      .catch(() => setStagingOptions([]));
   }, []);
 
   const validate = (): boolean => {
@@ -35,8 +47,8 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
 
     if (!scannedPallet.trim()) {
       errs.palletId = 'Pallet ID wajib di-scan.';
-    } else if (scannedPallet.trim() !== item.palletId) {
-      errs.palletId = `Pallet tidak cocok. Ekspektasi: ${item.palletId}`;
+    } else if (item.suggestedPalletId && scannedPallet.trim() !== item.suggestedPalletId) {
+      errs.palletId = `Pallet tidak cocok. Ekspektasi: ${item.suggestedPalletId}`;
     }
 
     if (item.recommendedBin) {
@@ -54,6 +66,10 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
       errs.pickedQty = `Kuantitas melebihi permintaan (maks: ${item.requestedQty}).`;
     }
 
+    if (!stagingLocationCode.trim()) {
+      errs.stagingLocation = 'Staging location wajib dipilih.';
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -64,7 +80,14 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
 
     setSubmitting(true);
     try {
-      const updated = await confirmPick(item.id, Number(pickedQty), notes.trim() || undefined);
+      const req: ConfirmPickRequest = {
+        scannedPalletId:    scannedPallet.trim()       || undefined,
+        scannedRackCode:    scannedBin.trim()          || undefined,
+        pickedQty:          Number(pickedQty),
+        stagingLocationCode: stagingLocationCode.trim() || undefined,
+        notes:              notes.trim()               || undefined,
+      };
+      const updated = await confirmPick(item.id, req);
       onConfirmed(updated);
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Gagal mengkonfirmasi pick.');
@@ -74,13 +97,15 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
   };
 
   const isPartial = Number(pickedQty) < item.requestedQty && Number(pickedQty) > 0;
+  const palletMatch = scannedPallet && item.suggestedPalletId && scannedPallet === item.suggestedPalletId;
+  const binMatch    = scannedBin && item.recommendedBin && scannedBin === item.recommendedBin;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 animate-fade-in">
+      <div className="bg-white rounded-xl border border-border shadow-xl w-full max-w-lg mx-4 animate-fade-in overflow-y-auto max-h-[90vh]">
 
         {/* Header */}
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-white z-10">
           <div>
             <h3 className="text-sm font-bold text-foreground">Picking Process</h3>
             <p className="text-xs text-muted-foreground mt-0.5 font-tabular">{item.pickingId}</p>
@@ -114,8 +139,8 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
             </div>
             <div className="col-span-2 flex items-center gap-1.5">
               <Package size={11} className="text-muted-foreground" />
-              <span className="text-muted-foreground">Pallet ID</span>
-              <p className="font-semibold font-tabular text-foreground ml-2">{item.palletId}</p>
+              <span className="text-muted-foreground">Suggested Pallet</span>
+              <p className="font-semibold font-tabular text-foreground ml-2">{item.suggestedPalletId || '—'}</p>
             </div>
           </div>
         </div>
@@ -137,21 +162,17 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
               placeholder="Scan barcode pallet..."
               value={scannedPallet}
               onChange={e => { setScannedPallet(e.target.value); setErrors(v => ({ ...v, palletId: undefined })); }}
-              className={`form-input text-sm font-tabular ${errors.palletId ? 'border-danger' : scannedPallet === item.palletId && scannedPallet ? 'border-success' : ''}`}
+              className={`form-input text-sm font-tabular ${errors.palletId ? 'border-danger' : palletMatch ? 'border-success' : ''}`}
             />
             {errors.palletId && (
-              <p className="mt-1 text-xs text-danger flex items-center gap-1">
-                <AlertTriangle size={11} /> {errors.palletId}
-              </p>
+              <p className="mt-1 text-xs text-danger flex items-center gap-1"><AlertTriangle size={11} /> {errors.palletId}</p>
             )}
-            {scannedPallet === item.palletId && scannedPallet && !errors.palletId && (
-              <p className="mt-1 text-xs text-success flex items-center gap-1">
-                <CheckCircle2 size={11} /> Pallet cocok
-              </p>
+            {palletMatch && !errors.palletId && (
+              <p className="mt-1 text-xs text-success flex items-center gap-1"><CheckCircle2 size={11} /> Pallet cocok</p>
             )}
           </div>
 
-          {/* Scan Bin — hanya jika ada recommendedBin */}
+          {/* Scan Bin */}
           {item.recommendedBin && (
             <div>
               <label className="block text-xs font-medium text-foreground mb-1">
@@ -162,17 +183,13 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
                 placeholder="Scan barcode bin location..."
                 value={scannedBin}
                 onChange={e => { setScannedBin(e.target.value); setErrors(v => ({ ...v, binCode: undefined })); }}
-                className={`form-input text-sm font-tabular ${errors.binCode ? 'border-danger' : scannedBin === item.recommendedBin && scannedBin ? 'border-success' : ''}`}
+                className={`form-input text-sm font-tabular ${errors.binCode ? 'border-danger' : binMatch ? 'border-success' : ''}`}
               />
               {errors.binCode && (
-                <p className="mt-1 text-xs text-danger flex items-center gap-1">
-                  <AlertTriangle size={11} /> {errors.binCode}
-                </p>
+                <p className="mt-1 text-xs text-danger flex items-center gap-1"><AlertTriangle size={11} /> {errors.binCode}</p>
               )}
-              {scannedBin === item.recommendedBin && scannedBin && !errors.binCode && (
-                <p className="mt-1 text-xs text-success flex items-center gap-1">
-                  <CheckCircle2 size={11} /> Bin cocok
-                </p>
+              {binMatch && !errors.binCode && (
+                <p className="mt-1 text-xs text-success flex items-center gap-1"><CheckCircle2 size={11} /> Bin cocok</p>
               )}
             </div>
           )}
@@ -191,18 +208,44 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
               className={`form-input text-sm font-tabular ${errors.pickedQty ? 'border-danger' : ''}`}
             />
             {errors.pickedQty && (
-              <p className="mt-1 text-xs text-danger flex items-center gap-1">
-                <AlertTriangle size={11} /> {errors.pickedQty}
-              </p>
+              <p className="mt-1 text-xs text-danger flex items-center gap-1"><AlertTriangle size={11} /> {errors.pickedQty}</p>
             )}
             {isPartial && !errors.pickedQty && (
               <p className="mt-1 text-xs text-warning flex items-center gap-1">
-                <AlertTriangle size={11} /> Partial pick — status akan tetap <strong>In Progress</strong>
+                <AlertTriangle size={11} /> Partial pick — status akan tetap <strong className="ml-1">In Progress</strong>
               </p>
             )}
           </div>
 
-          {/* Notes (opsional) */}
+          {/* Staging Location */}
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1 flex items-center gap-1">
+              <Warehouse size={11} /> Staging Location <span className="text-danger">*</span>
+            </label>
+            <select
+              value={stagingLocationCode}
+              onChange={e => { setStagingLocation(e.target.value); setErrors(v => ({ ...v, stagingLocation: undefined })); }}
+              className={`form-input text-sm ${errors.stagingLocation ? 'border-danger' : stagingLocationCode ? 'border-success' : ''}`}
+            >
+              <option value="">— Pilih staging location —</option>
+              {stagingOptions.map(loc => (
+                <option key={loc.id} value={loc.binCode}>{loc.binCode}</option>
+              ))}
+            </select>
+            {errors.stagingLocation && (
+              <p className="mt-1 text-xs text-danger flex items-center gap-1"><AlertTriangle size={11} /> {errors.stagingLocation}</p>
+            )}
+            {stagingLocationCode && !errors.stagingLocation && (
+              <p className="mt-1 text-xs text-success flex items-center gap-1">
+                <CheckCircle2 size={11} /> Inventory akan dipindah ke <strong className="ml-1">{stagingLocationCode}</strong>
+              </p>
+            )}
+            {stagingOptions.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">Memuat staging locations...</p>
+            )}
+          </div>
+
+          {/* Notes */}
           <div>
             <label className="block text-xs font-medium text-foreground mb-1">Catatan <span className="text-muted-foreground">(opsional)</span></label>
             <input
@@ -224,7 +267,7 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
+        <div className="px-5 py-4 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-white">
           <button onClick={onClose} disabled={submitting} className="btn-ghost text-sm border border-border">
             Batal
           </button>

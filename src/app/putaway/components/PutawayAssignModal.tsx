@@ -22,9 +22,12 @@ interface AssignFormData {
   notes: string;
 }
 
+interface BinOption { binCode: string; zone: string; }
+
 interface PutawayAssignModalProps {
   open: boolean;
   task: PutawayTask | null;
+  binOptions: BinOption[];
   onClose: () => void;
   onAssign: (taskId: string, bin: string, operator: string) => void;
 }
@@ -42,14 +45,7 @@ const operators = [
   'Kartini Dewi',
 ];
 
-const binSuggestions = [
-  'A-01-001', 'A-01-002', 'A-02-005', 'A-03-012',
-  'B-01-008', 'B-02-015', 'B-05-009',
-  'C-01-008', 'C-03-001',
-  'D-04-003', 'E-02-011', 'F-01-002',
-];
-
-export default function PutawayAssignModal({ open, task, onClose, onAssign }: PutawayAssignModalProps) {
+export default function PutawayAssignModal({ open, task, binOptions, onClose, onAssign }: PutawayAssignModalProps) {
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<AssignFormData>();
 
   const onSubmit = async (data: AssignFormData) => {
@@ -132,8 +128,8 @@ export default function PutawayAssignModal({ open, task, onClose, onAssign }: Pu
               })}
             />
             <datalist id="bin-suggestions">
-              {binSuggestions.map(bin => (
-                <option key={`bin-opt-${bin}`} value={bin} />
+              {binOptions.map(b => (
+                <option key={`bin-opt-${b.binCode}`} value={b.binCode}>{b.zone}</option>
               ))}
             </datalist>
             {errors.targetBin && <p className="text-xs text-danger mt-1">{errors.targetBin.message}</p>}

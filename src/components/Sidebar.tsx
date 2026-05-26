@@ -7,7 +7,7 @@ import AppLogo from '@/components/ui/AppLogo';
 import { useAuth } from '@/lib/context/AuthContext';
 import {
   LayoutDashboard, Boxes, TruckIcon, BarChart3, Database, Settings,
-  ChevronDown, ChevronRight, Search, Headphones, Circle,
+  ChevronDown, Search, Circle,
   ArrowDownToLine, LogOut, X,
 } from 'lucide-react';
 
@@ -39,7 +39,6 @@ const navItems: NavItem[] = [
   {
     label: 'Warehouse',
     icon: <ArrowDownToLine size={18} />,
-    badge: 2,
     children: [
       { label: 'Receiving', href: '/', icon: <Circle size={8} /> },
       { label: 'Putaway', href: '/putaway', icon: <Circle size={8} /> },
@@ -58,7 +57,7 @@ const navItems: NavItem[] = [
     icon: <TruckIcon size={18} />,
     children: [
       { label: 'Picking List', href: '/outbound/picking', icon: <Circle size={8} /> },
-      { label: 'Packing', href: '/outbound/packing', icon: <Circle size={8} /> },
+      { label: 'Picking Process', href: '/outbound/packing', icon: <Circle size={8} /> },
       { label: 'Dispatch', href: '/outbound/dispatch', icon: <Circle size={8} /> },
     ],
   },
@@ -312,19 +311,6 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* Help */}
-      <div className="p-3 border-t sidebar-border">
-        <button className="flex items-center gap-3 w-full px-3 py-2.5 rounded transition-all duration-150 hover:sidebar-hover group">
-          <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-            <Headphones size={14} className="text-white" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="text-white text-xs font-semibold">Need Help?</p>
-            <p className="text-xs sidebar-text">Contact Support</p>
-          </div>
-          <ChevronRight size={14} className="sidebar-text group-hover:text-white" />
-        </button>
-      </div>
     </aside>
   );
 }

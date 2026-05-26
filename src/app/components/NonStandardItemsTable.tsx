@@ -78,8 +78,9 @@ export default function NonStandardItemsTable({ items, onChange }: NonStandardIt
                   <input
                     type="number"
                     min={0}
-                    value={item.quantity}
-                    onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={e => updateItem(item.id, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                    placeholder="0"
                     className="form-input text-sm font-tabular"
                   />
                 </td>

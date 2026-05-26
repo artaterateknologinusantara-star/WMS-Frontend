@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Download, RefreshCw, Plus, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, XCircle, X } from 'lucide-react';
+import Link from 'next/link';
+import { Search, Download, RefreshCw, Plus, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, XCircle, X, PlayCircle } from 'lucide-react';
 import {
   getPickingList,
   createPicking,
   type PickingListItem,
+  type CreatePickingRequest,
 } from '@/lib/services/picking.service';
-import PickingProcessModal from './PickingProcessModal';
 
 interface ValidationAlert {
   type: 'incorrect-sku' | 'wrong-pallet' | 'wrong-rack' | 'qty-exceeded' | 'invalid-pallet-sku' | 'api-error';
@@ -34,7 +35,6 @@ const ITEMS_PER_PAGE = 8;
 
 interface CreateFormState {
   skuNumber: string;
-  palletId: string;
   requestedQty: string;
   assignedTo: string;
 }
@@ -49,13 +49,11 @@ export default function PickingListContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>({
     skuNumber: '',
-    palletId: '',
     requestedQty: '',
     assignedTo: '',
   });
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [processItem, setProcessItem] = useState<PickingListItem | null>(null);
 
   const loadPickingList = useCallback(async () => {
     setLoading(true);
@@ -85,25 +83,9 @@ export default function PickingListContent() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const handlePick = (id: number) => {
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-    if (item.status === 'error') {
-      setAlert({ type: 'incorrect-sku', message: '' });
-      return;
-    }
-    setProcessItem(item);
-  };
-
-  const handlePickConfirmed = (updated: PickingListItem) => {
-    setItems(prev => prev.map(i => i.id === updated.id ? updated : i));
-    setProcessItem(null);
-  };
-
   const handleCreateSubmit = async () => {
     const errs: Record<string, string> = {};
     if (!createForm.skuNumber.trim()) errs.skuNumber = 'SKU Number is required';
-    if (!createForm.palletId.trim()) errs.palletId = 'Pallet ID is required';
     if (!createForm.requestedQty || Number(createForm.requestedQty) <= 0) errs.requestedQty = 'Valid quantity required';
     if (!createForm.assignedTo.trim()) errs.assignedTo = 'Assigned To is required';
 
@@ -114,14 +96,14 @@ export default function PickingListContent() {
 
     setSubmitting(true);
     try {
-      const newItem = await createPicking({
+      const req: CreatePickingRequest = {
         skuCode: createForm.skuNumber.trim(),
-        palletId: createForm.palletId.trim(),
         requestedQty: Number(createForm.requestedQty),
         assignedTo: createForm.assignedTo.trim(),
-      });
+      };
+      const newItem = await createPicking(req);
       setItems(prev => [newItem, ...prev]);
-      setCreateForm({ skuNumber: '', palletId: '', requestedQty: '', assignedTo: '' });
+      setCreateForm({ skuNumber: '', requestedQty: '', assignedTo: '' });
       setCreateErrors({});
       setShowCreateModal(false);
     } catch (err) {
@@ -136,7 +118,7 @@ export default function PickingListContent() {
 
   const handleCloseModal = () => {
     setShowCreateModal(false);
-    setCreateForm({ skuNumber: '', palletId: '', requestedQty: '', assignedTo: '' });
+    setCreateForm({ skuNumber: '', requestedQty: '', assignedTo: '' });
     setCreateErrors({});
   };
 
@@ -261,7 +243,7 @@ export default function PickingListContent() {
                       <td className="px-4 py-3 text-sm text-foreground max-w-[160px]"><span className="truncate block">{item.skuName}</span></td>
                       <td className="px-4 py-3 text-sm font-bold font-tabular text-right text-foreground">{item.requestedQty}</td>
                       <td className="px-4 py-3 text-sm font-semibold font-tabular text-foreground">{item.recommendedBin || '—'}</td>
-                      <td className="px-4 py-3 text-sm font-tabular text-foreground">{item.palletId}</td>
+                      <td className="px-4 py-3 text-sm font-tabular text-foreground">{item.suggestedPalletId}</td>
                       <td className="px-4 py-3 text-sm font-tabular text-right">
                         <span className={item.pickedQty === item.requestedQty ? 'text-success font-bold' : 'text-muted-foreground'}>
                           {item.pickedQty}
@@ -274,25 +256,23 @@ export default function PickingListContent() {
                       <td className="px-4 py-3">
                         <div className="row-actions flex items-center gap-1">
                           {(item.status === 'pending' || item.status === 'in-progress') && (
-                            <button
-                              onClick={() => handlePick(item.id)}
+                            <Link
+                              href="/outbound/packing"
                               className="text-xs font-semibold text-primary hover:bg-primary/10 px-2 py-1 rounded transition-colors flex items-center gap-1"
                             >
-                              <CheckCircle2 size={12} />
-                              Confirm Pick
-                            </button>
+                              <PlayCircle size={12} />
+                              Proses
+                            </Link>
                           )}
                           {item.status === 'error' && (
-                            <button
-                              onClick={() => setAlert({ type: 'incorrect-sku', message: '' })}
-                              className="text-xs font-semibold text-danger hover:bg-danger-soft px-2 py-1 rounded transition-colors flex items-center gap-1"
-                            >
-                              <XCircle size={12} />
-                              View Error
-                            </button>
+                            <span className="text-xs text-danger px-2 flex items-center gap-1">
+                              <XCircle size={12} /> Error
+                            </span>
                           )}
                           {item.status === 'picked' && (
-                            <span className="text-xs text-muted-foreground italic px-2">Done</span>
+                            <span className="flex items-center gap-1 text-xs text-success px-2">
+                              <CheckCircle2 size={12} /> Staging: <strong>{item.stagingLocation || '—'}</strong>
+                            </span>
                           )}
                         </div>
                       </td>
@@ -327,15 +307,6 @@ export default function PickingListContent() {
         </div>
       </div>
 
-      {/* Picking Process Modal */}
-      {processItem && (
-        <PickingProcessModal
-          item={processItem}
-          onClose={() => setProcessItem(null)}
-          onConfirmed={handlePickConfirmed}
-        />
-      )}
-
       {/* Create Picking Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
@@ -345,30 +316,21 @@ export default function PickingListContent() {
               <button onClick={handleCloseModal} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
             </div>
             <div className="px-5 py-4 space-y-3">
+              {/* Info banner */}
+              <div className="rounded-lg bg-info/10 border border-info/20 px-3 py-2 text-xs text-info">
+                Sistem akan otomatis memilih rack &amp; pallet terbaik (FIFO). Tidak perlu scan pallet di tahap ini.
+              </div>
               {/* SKU Number */}
               <div>
                 <label className="form-label text-xs">SKU Number <span className="text-danger">*</span></label>
                 <input
                   type="text"
-                  placeholder="Scan or enter SKU code..."
+                  placeholder="Scan atau ketik kode SKU..."
                   value={createForm.skuNumber}
                   onChange={e => setCreateForm(f => ({ ...f, skuNumber: e.target.value }))}
                   className={`form-input text-sm ${createErrors.skuNumber ? 'border-danger' : ''}`}
                 />
                 {createErrors.skuNumber && <p className="text-xs text-danger mt-1">{createErrors.skuNumber}</p>}
-              </div>
-              {/* Pallet ID */}
-              <div>
-                <label className="form-label text-xs">Pallet ID <span className="text-danger">*</span></label>
-                <input
-                  type="text"
-                  placeholder="Scan pallet barcode..."
-                  value={createForm.palletId}
-                  onChange={e => setCreateForm(f => ({ ...f, palletId: e.target.value }))}
-                  className={`form-input text-sm ${createErrors.palletId ? 'border-danger' : ''}`}
-                />
-                {createErrors.palletId && <p className="text-xs text-danger mt-1">{createErrors.palletId}</p>}
-                <p className="text-xs text-muted-foreground mt-0.5">Pallet must contain the selected SKU</p>
               </div>
               {/* Requested Quantity */}
               <div>
