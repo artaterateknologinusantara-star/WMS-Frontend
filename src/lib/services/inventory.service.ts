@@ -1,5 +1,17 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 
+function getToken(): string {
+  try {
+    const stored = localStorage.getItem('syntera_auth_user');
+    if (!stored) return '';
+    return (JSON.parse(stored) as { token?: string })?.token ?? '';
+  } catch { return ''; }
+}
+
+function authHeaders() {
+  return { Authorization: `Bearer ${getToken()}` };
+}
+
 export interface InventoryLookupResult {
   skuId: number;
   skuCode: string;
@@ -30,7 +42,9 @@ export async function getInventoryByCode(skuCode: string): Promise<InventoryLook
     return null;
   }
 
-  const response = await fetch(`${API_BASE_URL}/inventory/by-code/${encodeURIComponent(skuCode.trim())}`);
+  const response = await fetch(`${API_BASE_URL}/inventory/by-code/${encodeURIComponent(skuCode.trim())}`, {
+    headers: authHeaders(),
+  });
 
   if (!response.ok) {
     return null;
@@ -44,8 +58,37 @@ export async function getInventoryByCode(skuCode: string): Promise<InventoryLook
   return payload.data as InventoryLookupResult;
 }
 
+export async function getInventoryPalletsByCode(skuCode: string): Promise<InventoryLookupResult[]> {
+  if (!skuCode?.trim()) return [];
+
+  const response = await fetch(
+    `${API_BASE_URL}/inventory/by-code/${encodeURIComponent(skuCode.trim())}/pallets`,
+    { headers: authHeaders() }
+  );
+
+  if (!response.ok) return [];
+
+  const payload = await response.json();
+  if (!payload?.success || !Array.isArray(payload?.data)) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (payload.data as Array<any>).map(item => ({
+    skuId: item.skuId,
+    skuCode: item.skuCode ?? '',
+    skuName: item.skuName ?? '',
+    qty: item.qty ?? 0,
+    binLocation: item.binLocation ?? '',
+    palletId: item.palletId ?? '',
+    uom: item.uom ?? '',
+    status: item.status ?? '',
+    lastMovementDate: item.lastMovementDate ?? '',
+  }));
+}
+
 export async function getInventoryList(): Promise<InventoryListResult[]> {
-  const response = await fetch(`${API_BASE_URL}/inventory`);
+  const response = await fetch(`${API_BASE_URL}/inventory`, {
+    headers: authHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error('Failed to load inventory list');

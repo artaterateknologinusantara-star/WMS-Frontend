@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ScanLine, CheckCircle2, AlertTriangle, Package, MapPin, Hash, Warehouse } from 'lucide-react';
+import { X, ScanLine, CheckCircle2, AlertTriangle, Package, MapPin, Hash, Warehouse, Loader2 } from 'lucide-react';
 import {
   confirmPick,
   getStagingLocations,
@@ -19,20 +19,18 @@ interface Props {
 interface FieldError {
   palletId?: string;
   binCode?: string;
-  pickedQty?: string;
   stagingLocation?: string;
 }
 
 export default function PickingProcessModal({ item, onClose, onConfirmed }: Props) {
-  const [scannedPallet, setScannedPallet]         = useState('');
-  const [scannedBin, setScannedBin]               = useState('');
-  const [pickedQty, setPickedQty]                 = useState(String(item.requestedQty));
+  const [scannedPallet, setScannedPallet] = useState('');
+  const [scannedBin, setScannedBin]       = useState('');
   const [stagingLocationCode, setStagingLocation] = useState('');
-  const [notes, setNotes]                         = useState('');
-  const [errors, setErrors]                       = useState<FieldError>({});
-  const [submitting, setSubmitting]               = useState(false);
-  const [apiError, setApiError]                   = useState('');
-  const [stagingOptions, setStagingOptions]        = useState<StagingLocation[]>([]);
+  const [notes, setNotes]                 = useState('');
+  const [errors, setErrors]               = useState<FieldError>({});
+  const [submitting, setSubmitting]       = useState(false);
+  const [apiError, setApiError]           = useState('');
+  const [stagingOptions, setStagingOptions] = useState<StagingLocation[]>([]);
   const palletRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,13 +57,6 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
       }
     }
 
-    const qty = Number(pickedQty);
-    if (!pickedQty || isNaN(qty) || qty <= 0) {
-      errs.pickedQty = 'Kuantitas harus lebih dari 0.';
-    } else if (qty > item.requestedQty) {
-      errs.pickedQty = `Kuantitas melebihi permintaan (maks: ${item.requestedQty}).`;
-    }
-
     if (!stagingLocationCode.trim()) {
       errs.stagingLocation = 'Staging location wajib dipilih.';
     }
@@ -81,11 +72,11 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
     setSubmitting(true);
     try {
       const req: ConfirmPickRequest = {
-        scannedPalletId:    scannedPallet.trim()       || undefined,
-        scannedRackCode:    scannedBin.trim()          || undefined,
-        pickedQty:          Number(pickedQty),
+        scannedPalletId:     scannedPallet.trim() || undefined,
+        scannedRackCode:     scannedBin.trim()    || undefined,
+        pickedQty:           item.requestedQty,
         stagingLocationCode: stagingLocationCode.trim() || undefined,
-        notes:              notes.trim()               || undefined,
+        notes:               notes.trim() || undefined,
       };
       const updated = await confirmPick(item.id, req);
       onConfirmed(updated);
@@ -96,9 +87,9 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
     }
   };
 
-  const isPartial = Number(pickedQty) < item.requestedQty && Number(pickedQty) > 0;
   const palletMatch = scannedPallet && item.suggestedPalletId && scannedPallet === item.suggestedPalletId;
   const binMatch    = scannedBin && item.recommendedBin && scannedBin === item.recommendedBin;
+  const canConfirm  = !!palletMatch && (!item.recommendedBin || !!binMatch) && !!stagingLocationCode;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -129,17 +120,17 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
             </div>
             <div className="flex items-center gap-1.5">
               <Hash size={11} className="text-muted-foreground" />
-              <span className="text-muted-foreground">Requested Qty</span>
-              <p className="font-bold text-foreground ml-auto font-tabular">{item.requestedQty}</p>
+              <span className="text-muted-foreground">Jumlah Pick</span>
+              <p className="font-bold text-primary ml-auto font-tabular text-sm">{item.requestedQty}</p>
             </div>
             <div className="flex items-center gap-1.5">
               <MapPin size={11} className="text-muted-foreground" />
-              <span className="text-muted-foreground">Recommended Bin</span>
+              <span className="text-muted-foreground">Rack / Bin</span>
               <p className="font-semibold text-foreground ml-auto font-tabular">{item.recommendedBin || '—'}</p>
             </div>
             <div className="col-span-2 flex items-center gap-1.5">
               <Package size={11} className="text-muted-foreground" />
-              <span className="text-muted-foreground">Suggested Pallet</span>
+              <span className="text-muted-foreground">Pallet ID</span>
               <p className="font-semibold font-tabular text-foreground ml-2">{item.suggestedPalletId || '—'}</p>
             </div>
           </div>
@@ -159,9 +150,9 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
             <input
               ref={palletRef}
               type="text"
-              placeholder="Scan barcode pallet..."
+              placeholder={`Scan barcode pallet...`}
               value={scannedPallet}
-              onChange={e => { setScannedPallet(e.target.value); setErrors(v => ({ ...v, palletId: undefined })); }}
+              onChange={e => { setScannedPallet(e.target.value); setErrors(v => ({ ...v, palletId: undefined })); setApiError(''); }}
               className={`form-input text-sm font-tabular ${errors.palletId ? 'border-danger' : palletMatch ? 'border-success' : ''}`}
             />
             {errors.palletId && (
@@ -182,7 +173,7 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
                 type="text"
                 placeholder="Scan barcode bin location..."
                 value={scannedBin}
-                onChange={e => { setScannedBin(e.target.value); setErrors(v => ({ ...v, binCode: undefined })); }}
+                onChange={e => { setScannedBin(e.target.value); setErrors(v => ({ ...v, binCode: undefined })); setApiError(''); }}
                 className={`form-input text-sm font-tabular ${errors.binCode ? 'border-danger' : binMatch ? 'border-success' : ''}`}
               />
               {errors.binCode && (
@@ -194,32 +185,9 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
             </div>
           )}
 
-          {/* Picked Qty */}
-          <div>
-            <label className="block text-xs font-medium text-foreground mb-1">
-              Jumlah Picked <span className="text-danger">*</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={item.requestedQty}
-              value={pickedQty}
-              onChange={e => { setPickedQty(e.target.value); setErrors(v => ({ ...v, pickedQty: undefined })); }}
-              className={`form-input text-sm font-tabular ${errors.pickedQty ? 'border-danger' : ''}`}
-            />
-            {errors.pickedQty && (
-              <p className="mt-1 text-xs text-danger flex items-center gap-1"><AlertTriangle size={11} /> {errors.pickedQty}</p>
-            )}
-            {isPartial && !errors.pickedQty && (
-              <p className="mt-1 text-xs text-warning flex items-center gap-1">
-                <AlertTriangle size={11} /> Partial pick — status akan tetap <strong className="ml-1">In Progress</strong>
-              </p>
-            )}
-          </div>
-
           {/* Staging Location */}
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1 flex items-center gap-1">
+            <label className="flex items-center gap-1 text-xs font-medium text-foreground mb-1">
               <Warehouse size={11} /> Staging Location <span className="text-danger">*</span>
             </label>
             <select
@@ -247,7 +215,9 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-medium text-foreground mb-1">Catatan <span className="text-muted-foreground">(opsional)</span></label>
+            <label className="block text-xs font-medium text-foreground mb-1">
+              Catatan <span className="text-muted-foreground">(opsional)</span>
+            </label>
             <input
               type="text"
               placeholder="Tambahkan catatan jika ada..."
@@ -259,7 +229,7 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
 
           {/* API Error */}
           {apiError && (
-            <div className="rounded-lg bg-danger/10 border border-danger/20 px-3 py-2 flex items-start gap-2">
+            <div className="rounded-lg bg-danger/10 border border-danger/20 px-3 py-2.5 flex items-start gap-2">
               <AlertTriangle size={14} className="text-danger mt-0.5 shrink-0" />
               <p className="text-xs text-danger">{apiError}</p>
             </div>
@@ -273,11 +243,13 @@ export default function PickingProcessModal({ item, onClose, onConfirmed }: Prop
           </button>
           <button
             onClick={handleConfirm}
-            disabled={submitting}
+            disabled={submitting || !canConfirm}
             className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
           >
-            <CheckCircle2 size={14} />
-            {submitting ? 'Memproses...' : 'Konfirmasi Pick'}
+            {submitting
+              ? <><Loader2 size={14} className="animate-spin" /> Memproses...</>
+              : <><CheckCircle2 size={14} /> Konfirmasi Pick ({item.requestedQty} pcs)</>
+            }
           </button>
         </div>
       </div>

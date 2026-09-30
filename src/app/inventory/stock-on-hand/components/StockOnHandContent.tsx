@@ -15,6 +15,8 @@ interface StockItem {
   uom: string;
   status: string;
   lastMovement: string;
+  batchNumber?: string | null;
+  expiredDate?: string | null;
 }
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api') + '/inventory';
@@ -54,13 +56,20 @@ export default function StockOnHandContent() {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  const getToken = () => {
+    try { return (JSON.parse(localStorage.getItem('syntera_auth_user') ?? '') as { token?: string })?.token ?? ''; }
+    catch { return ''; }
+  };
+
   const fetchInventory = async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
     setLoading(!showRefreshing);
     setError(null);
 
     try {
-      const response = await fetch(API_URL);
+      const response = await fetch(API_URL, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}`);
       }
@@ -204,7 +213,7 @@ const filtered = stockData.filter(s => {
             <table className="w-full min-w-[1000px]">
               <thead>
                 <tr className="bg-muted border-b border-border">
-                  {['SKU Number', 'SKU Name', 'Category', 'Pallet ID', 'Bin Location', 'Quantity', 'UOM', 'Status', 'Last Movement'].map(col => (
+                  {['SKU Number', 'SKU Name', 'Category', 'Pallet ID', 'Bin Location', 'Batch Number', 'Expired Date', 'Quantity', 'UOM', 'Status', 'Last Movement'].map(col => (
                     <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{col}</th>
                   ))}
                 </tr>
@@ -212,7 +221,7 @@ const filtered = stockData.filter(s => {
               <tbody>
                 {paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">No stock items match your search.</td>
+                    <td colSpan={11} className="px-4 py-10 text-center text-sm text-muted-foreground">No stock items match your search.</td>
                   </tr>
                 ) : paginated.map(item => (
                   <tr key={item.id} className="border-b border-border last:border-0 row-hover">
@@ -231,6 +240,10 @@ const filtered = stockData.filter(s => {
                     <td className="px-4 py-3 text-sm font-tabular text-foreground">{item.palletId}</td>
                     <td className="px-4 py-3">
                       <span className="text-sm font-semibold text-foreground font-tabular">{item.binLocation}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground font-tabular whitespace-nowrap">{item.batchNumber || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground font-tabular whitespace-nowrap">
+                      {item.expiredDate ? new Date(item.expiredDate).toLocaleDateString('id-ID') : '-'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className={`text-sm font-bold font-tabular ${item.quantity <= LOW_STOCK_THRESHOLD ? 'text-danger' : 'text-foreground'}`}>{item.quantity.toLocaleString()}</span>

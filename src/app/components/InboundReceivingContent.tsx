@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Printer, CheckCircle, Loader2 } from 'lucide-react';
+import { Printer, CheckCircle, Loader2, AlertTriangle, X } from 'lucide-react';
 import Barcode from 'react-barcode';
 import GeneralInfoForm from './GeneralInfoForm';
 import StandardItemsTable, { StandardItem } from './StandardItemsTable';
@@ -37,71 +37,69 @@ export default function InboundReceivingContent() {
   }, []);
 
   const [standardItems, setStandardItems] = useState<StandardItem[]>([
-    { id: 'sku-init-001', skuNumber: '', quantity: 0, uom: '' },
+    { id: 'sku-init-001', skuNumber: '', quantity: 0, uom: '', batchNumber: '', expiredDate: '' },
   ]);
   const [nonStandardItems, setNonStandardItems] = useState<NonStandardItem[]>([
     { id: 'nonstd-init-001', itemName: '', quantity: 0, uom: '' },
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [successModal, setSuccessModal] = useState(false);
   const [generatedPallets, setGeneratedPallets] = useState<PalletInfo[]>([]);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
- const onSubmit = async (data: InboundFormData) => {
-  setIsSubmitting(true);
-  try {
-    const details = [];
-
-    for (const item of standardItems) {
-      if (item.skuNumber && item.quantity > 0) {
-        // ✅ Tidak perlu getInventoryByCode untuk receiving
-        // Langsung pakai skuNumber sebagai reference
-        details.push({
+  const onSubmit = async (data: InboundFormData) => {
+    setSubmitError('');
+    setIsSubmitting(true);
+    try {
+      const details = standardItems
+        .filter(item => item.skuNumber && item.quantity > 0)
+        .map(item => ({
           skuCode: item.skuNumber,
           qty: item.quantity,
           uomId: 1,
-        });
+          batchNumber: item.batchNumber || undefined,
+          expiredDate: item.expiredDate || undefined,
+        }));
+
+      if (details.length === 0) {
+        setSubmitError('Tambahkan minimal 1 item dengan SKU dan quantity > 0.');
+        setIsSubmitting(false);
+        return;
       }
-    }
 
-    if (details.length === 0) {
-      alert('Tambahkan minimal 1 item dengan SKU dan quantity > 0.');
+      const request = {
+        supplierName: data.supplierName,
+        driverName: data.driverName,
+        vehicleNumber: data.vehicleNumber,
+        poNumber: data.poNumber,
+        warehouseLocation: data.warehouseLocation,
+        referenceNumber: data.referenceNumber,
+        notes: data.notes,
+        receivedBy: user?.userId ?? 1,
+        details,
+      };
+
+      const response = await submitReceiving(request);
+      const pallets = response.data?.pallets ?? [];
+
+      if (pallets.length === 0) {
+        setSubmitError('Receiving berhasil dibuat tetapi tidak ada pallet yang di-generate. Pastikan SKU Number yang dimasukkan terdaftar di Master SKU.');
+        return;
+      }
+
+      setGeneratedPallets(pallets);
+      setHistoryRefreshKey(k => k + 1);
+      setSuccessModal(true);
+      reset();
+      setStandardItems([{ id: 'sku-init-reset', skuNumber: '', quantity: 0, uom: '', batchNumber: '', expiredDate: '' }]);
+      setNonStandardItems([{ id: 'nonstd-init-reset', itemName: '', quantity: 0, uom: '' }]);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Terjadi kesalahan saat submit.');
+    } finally {
       setIsSubmitting(false);
-      return;
     }
-
-    const request = {
-      supplierName: data.supplierName,
-      driverName: data.driverName,
-      vehicleNumber: data.vehicleNumber,
-      poNumber: data.poNumber,
-      warehouseLocation: data.warehouseLocation,
-      referenceNumber: data.referenceNumber,
-      notes: data.notes,
-      receivedBy: user?.userId ?? 1,
-      details,
-    };
-
-    const response = await submitReceiving(request);
-    const pallets = response.data?.pallets ?? [];
-
-    if (pallets.length === 0) {
-      alert('Receiving berhasil dibuat tetapi tidak ada pallet yang di-generate.\nPastikan SKU Number yang dimasukkan terdaftar di Master SKU.');
-      return;
-    }
-
-    setGeneratedPallets(pallets);
-    setSuccessModal(true);
-    reset();
-    setStandardItems([{ id: 'sku-init-reset', skuNumber: '', quantity: 0, uom: '' }]);
-    setNonStandardItems([{ id: 'nonstd-init-reset', itemName: '', quantity: 0, uom: '' }]);
-
-  } catch (error) {
-    console.error('Submit error:', error);
-    alert(error instanceof Error ? error.message : 'Terjadi kesalahan saat submit.');
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen bg-white relative">
@@ -133,11 +131,18 @@ export default function InboundReceivingContent() {
           <NonStandardItemsTable items={nonStandardItems} onChange={setNonStandardItems} />
 
           {/* Receiving Status Table */}
-          <ReceivingStatusTable />
+          <ReceivingStatusTable refreshKey={historyRefreshKey} />
         </div>
 
         {/* Sticky Submit Button */}
         <div className="fixed bottom-0 left-0 lg:left-[260px] right-0 bg-white border-t border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 z-20">
+          {submitError && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg bg-danger/10 border border-danger/20 px-3 py-2 text-sm text-danger">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <span>{submitError}</span>
+              <button onClick={() => setSubmitError('')} className="ml-auto text-danger/60 hover:text-danger shrink-0"><X size={14} /></button>
+            </div>
+          )}
           <button
             type="submit"
             disabled={isSubmitting}

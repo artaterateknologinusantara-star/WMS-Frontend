@@ -160,6 +160,8 @@ export default function DashboardContent() {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(() => fetchData(true), 30_000);
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   const formattedTime = lastUpdated

@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Filter, Download, RefreshCw, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle, X, ScanLine, Loader2 } from 'lucide-react';
 import StatusBadge from '@/components/ui/StatusBadge';
 import PutawayAssignModal from './PutawayAssignModal';
+import QCCheckModal from './QCCheckModal';
 import EmptyState from '@/components/ui/EmptyState';
-import { MoveRight } from 'lucide-react';
-import { getPendingPutawayTasks, confirmPutaway, type PutawayTaskItem } from '@/lib/services/putaway.service';
+import { MoveRight, ClipboardCheck } from 'lucide-react';
+import { getPendingPutawayTasks, confirmPutaway, submitQCCheck, type PutawayTaskItem } from '@/lib/services/putaway.service';
 import { useAuth } from '@/lib/context/AuthContext';
 
 interface PutawayTask {
@@ -25,48 +26,10 @@ interface PutawayTask {
   status: 'pending' | 'putaway-assigned' | 'putaway-complete';
   receivedAt: string;
   supplier: string;
+  qcStatus: 'Pending' | 'Passed' | 'Failed';
+  qcRemarks?: string | null;
 }
 
-type ValidationAlertType = 'wrong-bin' | 'rack-full' | 'invalid-sku' | 'wrong-zone' | 'success' | 'api-error';
-
-interface ValidationAlert {
-  type: ValidationAlertType;
-  taskId?: string;
-  customMessage?: string;
-}
-
-const validationMessages: Record<ValidationAlertType, { title: string; desc: string; isError: boolean }> = {
-  'wrong-bin': {
-    title: 'Wrong Bin Location',
-    desc: 'The scanned bin/rack barcode does not match the assigned target bin. Please move to the correct bin location and scan again.',
-    isError: true,
-  },
-  'rack-full': {
-    title: 'Rack Capacity Full',
-    desc: 'The target rack has reached its maximum capacity. Please contact your supervisor to reassign this pallet to an available bin.',
-    isError: true,
-  },
-  'invalid-sku': {
-    title: 'Invalid SKU / Pallet',
-    desc: 'The scanned pallet ID does not match the expected pallet for this putaway task. Please verify the pallet barcode and try again.',
-    isError: true,
-  },
-  'wrong-zone': {
-    title: 'Wrong Zone',
-    desc: 'The scanned location is in the wrong warehouse zone. This SKU must be stored in the designated zone. Please check the zone assignment.',
-    isError: true,
-  },
-  'api-error': {
-    title: 'Putaway Failed',
-    desc: 'An error occurred while confirming putaway. See details below.',
-    isError: true,
-  },
-  'success': {
-    title: 'Putaway Confirmed',
-    desc: 'Pallet successfully placed in the target bin. Inventory has been updated.',
-    isError: false,
-  },
-};
 
 interface ScanValidationState {
   open: boolean;
@@ -96,6 +59,8 @@ function mapApiTaskToUiTask(item: PutawayTaskItem): PutawayTask {
     status: 'pending',
     receivedAt: item.createdAt ? new Date(item.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—',
     supplier: item.supplierName || '—',
+    qcStatus: item.qcStatus,
+    qcRemarks: item.qcRemarks,
   };
 }
 
@@ -103,7 +68,7 @@ const ITEMS_PER_PAGE = 8;
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 
-interface BinOption { binCode: string; zone: string; }
+interface BinOption { binCode: string; zone: string; isOccupied?: boolean; }
 
 export default function PutawayContent() {
   const { user } = useAuth();
@@ -113,18 +78,19 @@ export default function PutawayContent() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [assignModal, setAssignModal] = useState<{ open: boolean; task: PutawayTask | null }>({ open: false, task: null });
+  const [qcModal, setQcModal] = useState<{ open: boolean; task: PutawayTask | null; submitting: boolean; error: string }>({ open: false, task: null, submitting: false, error: '' });
   const [tasks, setTasks] = useState<PutawayTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [validationAlert, setValidationAlert] = useState<ValidationAlert | null>(null);
   const [binOptions, setBinOptions] = useState<BinOption[]>([]);
+  const [scanToast, setScanToast] = useState<{ title: string; desc: string } | null>(null);
+  const binInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/binlocation?available=true`)
-      .then(r => r.ok ? r.json() : null)
-      .then(p => { if (Array.isArray(p?.data)) setBinOptions(p.data); })
-      .catch(() => {});
-  }, []);
+  const dismissScanToast = () => {
+    setScanToast(null);
+    setTimeout(() => binInputRef.current?.focus(), 50);
+  };
+
   const [scanModal, setScanModal] = useState<ScanValidationState>({
     open: false,
     task: null,
@@ -140,9 +106,21 @@ export default function PutawayContent() {
     try {
       setLoading(true);
       setLoadError(null);
-      const apiTasks = await getPendingPutawayTasks();
+
+      const token = (() => {
+        try { return (JSON.parse(localStorage.getItem('syntera_auth_user') ?? '') as { token?: string })?.token ?? ''; }
+        catch { return ''; }
+      })();
+
+      const [apiTasks, binResp] = await Promise.all([
+        getPendingPutawayTasks(),
+        fetch(`${API_BASE_URL}/binlocation`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.ok ? r.json() : null),
+      ]);
+
+      if (Array.isArray(binResp?.data)) setBinOptions(binResp.data);
+
       setTasks(prev => {
-        // Keep locally-assigned tasks (putaway-assigned) merged with fresh pending from API
         const assigned = prev.filter(t => t.status === 'putaway-assigned');
         const assignedIds = new Set(assigned.map(t => t.palletId));
         const fresh = apiTasks
@@ -192,7 +170,31 @@ export default function PutawayContent() {
     setAssignModal({ open: false, task: null });
   };
 
+  const openQCModal = (task: PutawayTask) => {
+    setQcModal({ open: true, task, submitting: false, error: '' });
+  };
+
+  const handleQCSubmit = async (result: 'Passed' | 'Failed', remarks: string) => {
+    const task = qcModal.task;
+    if (!task) return;
+    setQcModal(s => ({ ...s, submitting: true, error: '' }));
+    try {
+      await submitQCCheck({
+        palletId: task.palletId,
+        result,
+        remarks: remarks || undefined,
+        checkedBy: user?.userId ?? 1,
+      });
+      setQcModal({ open: false, task: null, submitting: false, error: '' });
+      void loadTasks();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'QC check submission failed.';
+      setQcModal(s => ({ ...s, submitting: false, error: msg }));
+    }
+  };
+
   const openScanValidation = (task: PutawayTask) => {
+    setScanToast(null);
     setScanModal({ open: true, task, palletScan: '', binScan: '', step: 'pallet', palletError: '', binError: '', confirming: false });
   };
 
@@ -204,8 +206,7 @@ export default function PutawayContent() {
       return;
     }
     if (palletScan.trim() !== task.palletId) {
-      setScanModal(s => ({ ...s, open: false }));
-      setValidationAlert({ type: 'invalid-sku' });
+      setScanModal(s => ({ ...s, palletScan: '', palletError: `Pallet ID tidak cocok. Ekspektasi: ${task.palletId}` }));
       return;
     }
     setScanModal(s => ({ ...s, step: 'bin', palletError: '' }));
@@ -225,13 +226,19 @@ export default function PutawayContent() {
     // Only validate if a specific bin was pre-assigned
     if (expected !== '—') {
       if (scanned.charAt(0) !== expected.charAt(0)) {
-        setScanModal(s => ({ ...s, open: false }));
-        setValidationAlert({ type: 'wrong-zone' });
+        setScanModal(s => ({ ...s, binScan: '' }));
+        setScanToast({
+          title: 'Wrong Zone',
+          desc: `The scanned location is in zone "${scanned.charAt(0)}" but this SKU must go to zone "${expected.charAt(0)}". Please check the zone assignment and scan the correct bin.`,
+        });
         return;
       }
       if (scanned !== expected) {
-        setScanModal(s => ({ ...s, open: false }));
-        setValidationAlert({ type: 'wrong-bin' });
+        setScanModal(s => ({ ...s, binScan: '' }));
+        setScanToast({
+          title: 'Wrong Bin Location',
+          desc: `Scanned: ${scanned} — Expected: ${expected}. Please move to the correct bin location and scan again.`,
+        });
         return;
       }
     }
@@ -248,11 +255,10 @@ export default function PutawayContent() {
       // Remove from list (it's now in InventoryStock)
       setTasks(prev => prev.filter(t => t.id !== task.id));
       setScanModal(s => ({ ...s, open: false, confirming: false }));
-      setValidationAlert({ type: 'success', taskId: task.id });
+      void loadTasks();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Putaway confirmation failed.';
-      setScanModal(s => ({ ...s, open: false, confirming: false }));
-      setValidationAlert({ type: 'api-error', customMessage: msg });
+      setScanModal(s => ({ ...s, confirming: false, binError: msg }));
     }
   };
 
@@ -262,41 +268,8 @@ export default function PutawayContent() {
     complete: 0,
   };
 
-  const alertInfo = validationAlert
-    ? {
-        ...validationMessages[validationAlert.type],
-        desc: validationAlert.customMessage ?? validationMessages[validationAlert.type].desc,
-      }
-    : null;
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Validation Alert Popup */}
-      {validationAlert && alertInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className={`bg-white rounded-lg border shadow-lg w-full max-w-sm mx-4 overflow-hidden animate-fade-in ${alertInfo.isError ? 'border-danger' : 'border-success'}`}>
-            <div className={`px-5 py-4 flex items-center justify-between ${alertInfo.isError ? 'bg-danger' : 'bg-success'}`}>
-              <div className="flex items-center gap-2">
-                {alertInfo.isError
-                  ? <AlertTriangle size={18} className="text-white" />
-                  : <CheckCircle2 size={18} className="text-white" />
-                }
-                <span className="text-white font-bold text-sm">{alertInfo.title}</span>
-              </div>
-              <button onClick={() => setValidationAlert(null)} className="text-white/80 hover:text-white"><X size={16} /></button>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-sm text-foreground">{alertInfo.desc}</p>
-              <button
-                onClick={() => setValidationAlert(null)}
-                className={`mt-4 w-full justify-center text-sm py-2 rounded font-semibold text-white transition-colors ${alertInfo.isError ? 'bg-danger hover:bg-danger/90' : 'bg-success hover:bg-success/90'}`}
-              >
-                {alertInfo.isError ? 'Dismiss' : 'OK'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Scan Validation Modal */}
       {scanModal.open && scanModal.task && (
@@ -308,7 +281,7 @@ export default function PutawayContent() {
                 <h3 className="text-sm font-bold text-foreground">Putaway Validation</h3>
               </div>
               <button
-                onClick={() => setScanModal(s => ({ ...s, open: false }))}
+                onClick={() => { setScanToast(null); setScanModal(s => ({ ...s, open: false })); }}
                 disabled={scanModal.confirming}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-40"
               >
@@ -376,14 +349,28 @@ export default function PutawayContent() {
               {/* Step 2 */}
               {scanModal.step === 'bin' && (
                 <div className="pb-4 space-y-3">
+                  {/* Non-blocking scan toast */}
+                  {scanToast && (
+                    <div className="flex items-start gap-2.5 bg-warning/10 border border-warning rounded-lg px-3 py-2.5 animate-fade-in">
+                      <AlertTriangle size={15} className="text-warning mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-warning">{scanToast.title}</p>
+                        <p className="text-xs text-foreground mt-0.5">{scanToast.desc}</p>
+                      </div>
+                      <button onClick={dismissScanToast} className="text-muted-foreground hover:text-foreground shrink-0">
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
                   <datalist id="bin-list">
-                    {binOptions.map(b => (
+                    {binOptions.filter(b => !b.isOccupied && b.zone !== 'Outbound Staging').map(b => (
                       <option key={b.binCode} value={b.binCode}>{b.zone}</option>
                     ))}
                   </datalist>
                   <div>
                     <label className="form-label text-xs">Scan Rack / Bin Barcode</label>
                     <input
+                      ref={binInputRef}
                       type="text"
                       list="bin-list"
                       placeholder={scanModal.task.targetBin !== '—' ? `Expected: ${scanModal.task.targetBin}` : 'e.g. A-01-001'}
@@ -513,6 +500,7 @@ export default function PutawayContent() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Target Bin</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Assigned To</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">QC Status</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
                 </tr>
@@ -520,7 +508,7 @@ export default function PutawayContent() {
               <tbody>
                 {loading && tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-16 text-center">
+                    <td colSpan={11} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Loader2 size={24} className="animate-spin" />
                         <span className="text-sm">Loading putaway tasks...</span>
@@ -529,7 +517,7 @@ export default function PutawayContent() {
                   </tr>
                 ) : paginated.length === 0 ? (
                   <tr>
-                    <td colSpan={10}>
+                    <td colSpan={11}>
                       <EmptyState
                         icon={<MoveRight size={24} className="text-muted-foreground" />}
                         title="No putaway tasks found"
@@ -573,11 +561,34 @@ export default function PutawayContent() {
                         }
                       </td>
                       <td className="px-4 py-3 text-center">
+                        <span
+                          className={`status-badge ${
+                            task.qcStatus === 'Passed'
+                              ? 'bg-success-soft text-success border border-green-200'
+                              : task.qcStatus === 'Failed'
+                              ? 'bg-danger-soft text-danger border border-red-200'
+                              : 'bg-warning-soft text-warning border border-yellow-200'
+                          }`}
+                          title={task.qcRemarks || undefined}
+                        >
+                          {task.qcStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
                         <StatusBadge status={task.status} />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 row-actions">
-                          {task.status === 'pending' && (
+                          {task.status === 'pending' && task.qcStatus !== 'Passed' && (
+                            <button
+                              onClick={() => openQCModal(task)}
+                              className="text-xs font-semibold text-warning hover:bg-warning-soft px-2 py-1 rounded transition-colors flex items-center gap-1 whitespace-nowrap"
+                            >
+                              <ClipboardCheck size={12} />
+                              QC Check
+                            </button>
+                          )}
+                          {task.status === 'pending' && task.qcStatus === 'Passed' && (
                             <button
                               onClick={() => setAssignModal({ open: true, task })}
                               className="text-xs font-semibold text-primary hover:bg-primary/10 px-2 py-1 rounded transition-colors whitespace-nowrap"
@@ -633,8 +644,23 @@ export default function PutawayContent() {
         open={assignModal.open}
         task={assignModal.task}
         binOptions={binOptions}
+        occupiedBins={[
+          ...binOptions.filter(b => b.isOccupied).map(b => b.binCode),
+          ...tasks
+            .filter(t => t.id !== assignModal.task?.id && t.targetBin !== '—')
+            .map(t => t.targetBin),
+        ]}
         onClose={() => setAssignModal({ open: false, task: null })}
         onAssign={handleAssign}
+      />
+
+      <QCCheckModal
+        open={qcModal.open}
+        task={qcModal.task}
+        submitting={qcModal.submitting}
+        error={qcModal.error}
+        onClose={() => setQcModal({ open: false, task: null, submitting: false, error: '' })}
+        onSubmit={handleQCSubmit}
       />
     </div>
   );

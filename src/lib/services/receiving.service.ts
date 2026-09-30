@@ -1,11 +1,21 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 
+function getToken(): string {
+  try {
+    const stored = localStorage.getItem('syntera_auth_user');
+    if (!stored) return '';
+    return (JSON.parse(stored) as { token?: string })?.token ?? '';
+  } catch { return ''; }
+}
+
 export interface ReceivingDetailRequest {
   skuId?: number;
   skuCode?: string;
   qty: number;
   uomId?: number;
   palletId?: string;
+  batchNumber?: string;
+  expiredDate?: string;
 }
 
 export interface ReceivingSubmitRequest {
@@ -39,7 +49,10 @@ export interface ReceivingSubmitResponse {
 export async function submitReceiving(request: ReceivingSubmitRequest): Promise<ReceivingSubmitResponse> {
   const response = await fetch(`${API_BASE_URL}/receiving`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+    },
     body: JSON.stringify(request),
   });
 

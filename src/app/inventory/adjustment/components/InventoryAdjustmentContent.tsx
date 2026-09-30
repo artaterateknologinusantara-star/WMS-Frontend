@@ -5,7 +5,7 @@ import {
   Search, ChevronLeft, ChevronRight, Clock, CheckCircle2, XCircle,
   Package, MapPin, Loader2, AlertTriangle, Plus, X,
 } from 'lucide-react';
-import { getInventoryByCode, type InventoryLookupResult } from '@/lib/services/inventory.service';
+import { getInventoryPalletsByCode, type InventoryLookupResult } from '@/lib/services/inventory.service';
 import { useAuth } from '@/lib/context/AuthContext';
 import {
   loadAdjustmentHistory,
@@ -91,6 +91,7 @@ export default function InventoryAdjustmentContent() {
   const [skuLookupLoading, setSkuLookupLoading] = useState(false);
   const [skuLookupError, setSkuLookupError] = useState<string | null>(null);
   const [skuData, setSkuData] = useState<InventoryLookupResult | null>(null);
+  const [skuStocks, setSkuStocks] = useState<InventoryLookupResult[]>([]);
   const [submitLoading, setSubmitLoading] = useState(false);
 
   // ── History ──────────────────────────────────────────────────────────
@@ -154,6 +155,7 @@ export default function InventoryAdjustmentContent() {
   const openPanel = () => {
     setForm(emptyForm);
     setSkuData(null);
+    setSkuStocks([]);
     setSkuLookupError(null);
     setErrors({});
     setSubmitError('');
@@ -164,17 +166,34 @@ export default function InventoryAdjustmentContent() {
   // ── SKU lookup ────────────────────────────────────────────────────────
 
   const lookupSku = async (skuCode: string) => {
-    if (!skuCode?.trim()) { setSkuLookupError(null); setSkuData(null); return; }
+    if (!skuCode?.trim()) { setSkuLookupError(null); setSkuData(null); setSkuStocks([]); return; }
     setSkuLookupLoading(true);
     setSkuLookupError(null);
     try {
-      const inv = await getInventoryByCode(skuCode);
-      if (!inv) { setSkuLookupError('SKU not found.'); setSkuData(null); return; }
-      setSkuData(inv);
-      setForm(f => ({ ...f, skuNumber: inv.skuCode, palletId: inv.palletId, binLocation: inv.binLocation, prevQty: inv.qty.toString() }));
+      const stocks = await getInventoryPalletsByCode(skuCode);
+      if (!stocks.length) {
+        setSkuLookupError('SKU not found or no active stock available.');
+        setSkuData(null);
+        setSkuStocks([]);
+        return;
+      }
+      setSkuStocks(stocks);
+      setSkuData(stocks[0]);
+      if (stocks.length === 1) {
+        setForm(f => ({
+          ...f,
+          skuNumber: stocks[0].skuCode,
+          palletId: stocks[0].palletId,
+          binLocation: stocks[0].binLocation,
+          prevQty: stocks[0].qty.toString(),
+        }));
+      } else {
+        setForm(f => ({ ...f, skuNumber: stocks[0].skuCode, palletId: '', binLocation: '', prevQty: '' }));
+      }
     } catch {
       setSkuLookupError('Unable to load SKU details.');
       setSkuData(null);
+      setSkuStocks([]);
     } finally {
       setSkuLookupLoading(false);
     }
@@ -464,13 +483,36 @@ export default function InventoryAdjustmentContent() {
                 {/* Pallet ID */}
                 <div>
                   <label className="form-label text-xs">Pallet ID <span className="text-danger">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="Scan pallet barcode..."
-                    value={form.palletId}
-                    onChange={e => setForm(f => ({ ...f, palletId: e.target.value }))}
-                    className={`form-input text-sm py-2 ${errors.palletId ? 'border-danger' : ''}`}
-                  />
+                  {skuStocks.length > 0 ? (
+                    <select
+                      value={form.palletId}
+                      onChange={e => {
+                        const selected = skuStocks.find(s => s.palletId === e.target.value);
+                        setForm(f => ({
+                          ...f,
+                          palletId: selected?.palletId ?? '',
+                          binLocation: selected?.binLocation ?? '',
+                          prevQty: selected ? selected.qty.toString() : '',
+                        }));
+                      }}
+                      className={`form-input text-sm py-2 ${errors.palletId ? 'border-danger' : ''}`}
+                    >
+                      {skuStocks.length > 1 && <option value="">Select pallet...</option>}
+                      {skuStocks.map(s => (
+                        <option key={s.palletId} value={s.palletId}>
+                          {s.palletId} — Qty: {s.qty} @ {s.binLocation || 'N/A'}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Scan pallet barcode..."
+                      value={form.palletId}
+                      onChange={e => setForm(f => ({ ...f, palletId: e.target.value }))}
+                      className={`form-input text-sm py-2 ${errors.palletId ? 'border-danger' : ''}`}
+                    />
+                  )}
                   {errors.palletId && <p className="text-xs text-danger mt-1">{errors.palletId}</p>}
                 </div>
 
@@ -482,7 +524,8 @@ export default function InventoryAdjustmentContent() {
                     placeholder="e.g. A-03-012"
                     value={form.binLocation}
                     onChange={e => setForm(f => ({ ...f, binLocation: e.target.value }))}
-                    className={`form-input text-sm py-2 ${errors.binLocation ? 'border-danger' : ''}`}
+                    readOnly={skuStocks.length > 0 && !!form.palletId}
+                    className={`form-input text-sm py-2 ${errors.binLocation ? 'border-danger' : ''}${skuStocks.length > 0 && form.palletId ? ' bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
                   />
                   {errors.binLocation && <p className="text-xs text-danger mt-1">{errors.binLocation}</p>}
                 </div>
@@ -496,7 +539,8 @@ export default function InventoryAdjustmentContent() {
                       placeholder="0"
                       value={form.prevQty}
                       onChange={e => setForm(f => ({ ...f, prevQty: e.target.value }))}
-                      className={`form-input text-sm py-2 ${errors.prevQty ? 'border-danger' : ''}`}
+                      readOnly={skuStocks.length > 0 && !!form.palletId}
+                      className={`form-input text-sm py-2 ${errors.prevQty ? 'border-danger' : ''}${skuStocks.length > 0 && form.palletId ? ' bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
                     />
                     {errors.prevQty && <p className="text-xs text-danger mt-1">{errors.prevQty}</p>}
                   </div>

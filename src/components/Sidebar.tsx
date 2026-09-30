@@ -74,9 +74,9 @@ const navItems: NavItem[] = [
     label: 'Master Data',
     icon: <Database size={18} />,
     children: [
-      { label: 'SKU Master', href: '#', icon: <Circle size={8} /> },
+      { label: 'SKU Master', href: '/master/sku', icon: <Circle size={8} /> },
       { label: 'Supplier List', href: '#', icon: <Circle size={8} /> },
-      { label: 'Bin Locations', href: '#', icon: <Circle size={8} /> },
+      { label: 'Bin Locations', href: '/master/bin-location', icon: <Circle size={8} /> },
     ],
   },
   {

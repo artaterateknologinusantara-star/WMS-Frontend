@@ -22,12 +22,13 @@ interface AssignFormData {
   notes: string;
 }
 
-interface BinOption { binCode: string; zone: string; }
+interface BinOption { binCode: string; zone: string; isOccupied?: boolean; }
 
 interface PutawayAssignModalProps {
   open: boolean;
   task: PutawayTask | null;
   binOptions: BinOption[];
+  occupiedBins: string[];
   onClose: () => void;
   onAssign: (taskId: string, bin: string, operator: string) => void;
 }
@@ -45,12 +46,15 @@ const operators = [
   'Kartini Dewi',
 ];
 
-export default function PutawayAssignModal({ open, task, binOptions, onClose, onAssign }: PutawayAssignModalProps) {
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<AssignFormData>();
+export default function PutawayAssignModal({ open, task, binOptions, occupiedBins, onClose, onAssign }: PutawayAssignModalProps) {
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting }, reset } = useForm<AssignFormData>();
 
   const onSubmit = async (data: AssignFormData) => {
-    // Backend integration point: PATCH /api/putaway/:taskId { targetBin, assignedTo, notes }
-    await new Promise(r => setTimeout(r, 800));
+    const binUpper = data.targetBin.trim().toUpperCase();
+    if (occupiedBins.map(b => b.toUpperCase()).includes(binUpper)) {
+      setError('targetBin', { message: `Bin ${data.targetBin} is already occupied. Please choose a different bin location.` });
+      return;
+    }
     onAssign(task!.id, data.targetBin, data.assignedTo);
     reset();
   };
@@ -128,9 +132,14 @@ export default function PutawayAssignModal({ open, task, binOptions, onClose, on
               })}
             />
             <datalist id="bin-suggestions">
-              {binOptions.map(b => (
-                <option key={`bin-opt-${b.binCode}`} value={b.binCode}>{b.zone}</option>
-              ))}
+              {binOptions
+                .filter(b =>
+                  b.zone !== 'Outbound Staging' &&
+                  !occupiedBins.map(o => o.toUpperCase()).includes(b.binCode.toUpperCase())
+                )
+                .map(b => (
+                  <option key={`bin-opt-${b.binCode}`} value={b.binCode}>{b.zone}</option>
+                ))}
             </datalist>
             {errors.targetBin && <p className="text-xs text-danger mt-1">{errors.targetBin.message}</p>}
           </div>

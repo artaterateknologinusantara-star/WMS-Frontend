@@ -10,6 +10,8 @@ export interface StandardItem {
   skuNumber: string;
   quantity: number;
   uom: string;
+  batchNumber: string;
+  expiredDate: string;
 }
 
 interface UomOption {
@@ -33,16 +35,22 @@ export default function StandardItemsTable({ items, onChange }: StandardItemsTab
   const [skuOptions, setSkuOptions] = useState<SkuOption[]>([]);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/inventory/uom`)
+    const getToken = () => {
+      try { return (JSON.parse(localStorage.getItem('syntera_auth_user') ?? '') as { token?: string })?.token ?? ''; }
+      catch { return ''; }
+    };
+    const headers = { Authorization: `Bearer ${getToken()}` };
+
+    fetch(`${API_BASE_URL}/inventory/uom`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(payload => { if (Array.isArray(payload?.data)) setUomOptions(payload.data); })
       .catch(() => {});
 
-    // Load available SKU codes for autocomplete
-    fetch(`${API_BASE_URL}/mastersku`)
+    fetch(`${API_BASE_URL}/mastersku`, { headers })
       .then(r => r.ok ? r.json() : null)
       .then(payload => {
         const list = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setSkuOptions(list.map((s: any) => ({ skuCode: s.skuCode ?? s.sKUCode ?? '', skuName: s.skuName ?? s.sKUName ?? '' })));
       })
       .catch(() => {});
@@ -69,14 +77,20 @@ export default function StandardItemsTable({ items, onChange }: StandardItemsTab
         <table className="w-full">
           <thead>
             <tr className="bg-muted border-b border-border">
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[45%]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[25%]">
                 SKU Number
               </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[25%]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[13%]">
                 Quantity
               </th>
-              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[20%]">
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[12%]">
                 UOM
+              </th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[20%]">
+                Batch Number
+              </th>
+              <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[20%]">
+                Expired Date
               </th>
               <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[10%]">
                 Action
@@ -122,6 +136,23 @@ export default function StandardItemsTable({ items, onChange }: StandardItemsTab
                         ))}
                   </select>
                 </td>
+                <td className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. BATCH-001"
+                    value={item.batchNumber}
+                    onChange={e => updateItem(item.id, 'batchNumber', e.target.value)}
+                    className="form-input text-sm"
+                  />
+                </td>
+                <td className="px-4 py-2">
+                  <input
+                    type="date"
+                    value={item.expiredDate}
+                    onChange={e => updateItem(item.id, 'expiredDate', e.target.value)}
+                    className="form-input text-sm"
+                  />
+                </td>
                 <td className="px-4 py-2 text-center">
                   <button
                     type="button"
@@ -136,7 +167,7 @@ export default function StandardItemsTable({ items, onChange }: StandardItemsTab
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className="px-4 py-6 text-center text-sm text-muted-foreground">
                   No SKU items added. Click below to add a standard SKU.
                 </td>
               </tr>
@@ -147,7 +178,7 @@ export default function StandardItemsTable({ items, onChange }: StandardItemsTab
       <button
         type="button"
         onClick={() =>
-          onChange([...items, { id: `sku-${Date.now()}`, skuNumber: '', quantity: 0, uom: '' }])
+          onChange([...items, { id: `sku-${Date.now()}`, skuNumber: '', quantity: 0, uom: '', batchNumber: '', expiredDate: '' }])
         }
         className="mt-2 text-xs font-semibold text-primary hover:text-secondary transition-colors flex items-center gap-1"
       >

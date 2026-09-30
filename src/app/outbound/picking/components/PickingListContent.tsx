@@ -1,28 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { Search, Download, RefreshCw, Plus, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, XCircle, X, PlayCircle } from 'lucide-react';
+import { Search, Download, RefreshCw, Plus, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, XCircle, X, PlayCircle, Loader2, Package, MapPin } from 'lucide-react';
 import {
   getPickingList,
   createPicking,
+  checkStock,
   type PickingListItem,
   type CreatePickingRequest,
+  type StockCheckResult,
 } from '@/lib/services/picking.service';
 
-interface ValidationAlert {
-  type: 'incorrect-sku' | 'wrong-pallet' | 'wrong-rack' | 'qty-exceeded' | 'invalid-pallet-sku' | 'api-error';
-  message: string;
-}
-
-const alertMessages: Record<string, { title: string; desc: string }> = {
-  'incorrect-sku': { title: 'Incorrect SKU', desc: 'The scanned SKU does not match the picking list item. Please verify and scan the correct SKU barcode.' },
-  'wrong-pallet': { title: 'Wrong Pallet', desc: 'The scanned pallet ID does not match the recommended pallet. Please check the pallet location.' },
-  'wrong-rack': { title: 'Wrong Rack Location', desc: 'The scanned rack location does not match the recommended bin. Please move to the correct rack.' },
-  'qty-exceeded': { title: 'Quantity Exceeded', desc: 'The entered quantity exceeds the available stock in this bin location. Please verify the quantity.' },
-  'invalid-pallet-sku': { title: 'Invalid Pallet for Selected SKU', desc: 'The scanned pallet does not contain the selected SKU. Please scan the correct pallet barcode for this SKU.' },
-  'api-error': { title: 'Error', desc: '' },
-};
 
 const statusBadge: Record<string, { label: string; classes: string }> = {
   pending: { label: 'Pending', classes: 'bg-warning-soft text-warning border border-yellow-200' },
@@ -45,7 +34,7 @@ export default function PickingListContent() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [alert, setAlert] = useState<ValidationAlert | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>({
     skuNumber: '',
@@ -54,6 +43,10 @@ export default function PickingListContent() {
   });
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [skuCheck, setSkuCheck] = useState<StockCheckResult | null | 'not-found'>(null);
+  const [skuChecking, setSkuChecking] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState<PickingListItem[] | null>(null);
+  const skuDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadPickingList = useCallback(async () => {
     setLoading(true);
@@ -61,7 +54,7 @@ export default function PickingListContent() {
       const data = await getPickingList();
       setItems(data);
     } catch {
-      setAlert({ type: 'api-error', message: 'Failed to load picking list. Please refresh.' });
+      setLoadError('Failed to load picking list. Please refresh.');
     } finally {
       setLoading(false);
     }
@@ -83,11 +76,40 @@ export default function PickingListContent() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+  const handleSkuChange = (value: string) => {
+    setCreateForm(f => ({ ...f, skuNumber: value }));
+    setCreateErrors(e => ({ ...e, skuNumber: '' }));
+    setSkuCheck(null);
+    if (skuDebounceRef.current) clearTimeout(skuDebounceRef.current);
+    if (!value.trim()) return;
+    skuDebounceRef.current = setTimeout(async () => {
+      setSkuChecking(true);
+      try {
+        const result = await checkStock(value.trim());
+        setSkuCheck(result ?? 'not-found');
+      } catch {
+        setSkuCheck('not-found');
+      } finally {
+        setSkuChecking(false);
+      }
+    }, 600);
+  };
+
   const handleCreateSubmit = async () => {
     const errs: Record<string, string> = {};
-    if (!createForm.skuNumber.trim()) errs.skuNumber = 'SKU Number is required';
-    if (!createForm.requestedQty || Number(createForm.requestedQty) <= 0) errs.requestedQty = 'Valid quantity required';
-    if (!createForm.assignedTo.trim()) errs.assignedTo = 'Assigned To is required';
+    const qty = Number(createForm.requestedQty);
+
+    if (!createForm.skuNumber.trim()) errs.skuNumber = 'SKU Number wajib diisi';
+    else if (skuCheck === 'not-found') errs.skuNumber = `SKU '${createForm.skuNumber}' tidak ditemukan di sistem`;
+    else if (skuCheck === null && !skuChecking) errs.skuNumber = 'Ketik kode SKU dan tunggu validasi';
+
+    if (!createForm.requestedQty || qty <= 0) {
+      errs.requestedQty = 'Jumlah harus lebih dari 0';
+    } else if (skuCheck && skuCheck !== 'not-found' && qty > skuCheck.availableQty) {
+      errs.requestedQty = `Stok tidak mencukupi. Total tersedia: ${skuCheck.availableQty} units untuk SKU ini`;
+    }
+
+    if (!createForm.assignedTo.trim()) errs.assignedTo = 'Assigned To wajib diisi';
 
     if (Object.keys(errs).length > 0) {
       setCreateErrors(errs);
@@ -98,19 +120,16 @@ export default function PickingListContent() {
     try {
       const req: CreatePickingRequest = {
         skuCode: createForm.skuNumber.trim(),
-        requestedQty: Number(createForm.requestedQty),
+        requestedQty: qty,
         assignedTo: createForm.assignedTo.trim(),
       };
-      const newItem = await createPicking(req);
-      setItems(prev => [newItem, ...prev]);
-      setCreateForm({ skuNumber: '', requestedQty: '', assignedTo: '' });
+      const newItems = await createPicking(req);
+      setItems(prev => [...newItems, ...prev]);
+      setCreateSuccess(newItems);
       setCreateErrors({});
-      setShowCreateModal(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create picking';
-      setShowCreateModal(false);
-      setCreateErrors({});
-      setAlert({ type: 'api-error', message: msg });
+      setCreateErrors({ submit: msg });
     } finally {
       setSubmitting(false);
     }
@@ -120,6 +139,10 @@ export default function PickingListContent() {
     setShowCreateModal(false);
     setCreateForm({ skuNumber: '', requestedQty: '', assignedTo: '' });
     setCreateErrors({});
+    setSkuCheck(null);
+    setSkuChecking(false);
+    setCreateSuccess(null);
+    if (skuDebounceRef.current) clearTimeout(skuDebounceRef.current);
   };
 
   const summary = {
@@ -130,31 +153,8 @@ export default function PickingListContent() {
     error: items.filter(i => i.status === 'error').length,
   };
 
-  const alertDesc = alert
-    ? (alert.type === 'api-error' ? alert.message : alertMessages[alert.type]?.desc)
-    : '';
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Validation Alert Popup */}
-      {alert && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-lg border border-danger shadow-lg w-full max-w-sm mx-4 overflow-hidden animate-fade-in">
-            <div className="bg-danger px-5 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={18} className="text-white" />
-                <span className="text-white font-bold text-sm">{alertMessages[alert.type]?.title ?? 'Error'}</span>
-              </div>
-              <button onClick={() => setAlert(null)} className="text-white/80 hover:text-white"><X size={16} /></button>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-sm text-foreground">{alertDesc}</p>
-              <button onClick={() => setAlert(null)} className="mt-4 btn-primary w-full justify-center text-sm">Dismiss</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="bg-white border-b border-border px-4 py-3 sm:px-6 lg:px-8 lg:py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
@@ -184,6 +184,14 @@ export default function PickingListContent() {
       </div>
 
       <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 max-w-screen-2xl">
+        {loadError && (
+          <div className="mb-4 rounded-lg bg-danger/10 border border-danger/20 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-danger">
+              <AlertTriangle size={14} /> {loadError}
+            </div>
+            <button onClick={() => setLoadError('')} className="text-danger/60 hover:text-danger"><X size={14} /></button>
+          </div>
+        )}
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -312,57 +320,181 @@ export default function PickingListContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-lg border border-border shadow-lg w-full max-w-md mx-4 animate-fade-in">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground">Create Picking List</h3>
+              <h3 className="text-sm font-bold text-foreground">
+                {createSuccess ? 'Picking List Dibuat' : 'Create Picking List'}
+              </h3>
               <button onClick={handleCloseModal} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
             </div>
-            <div className="px-5 py-4 space-y-3">
-              {/* Info banner */}
-              <div className="rounded-lg bg-info/10 border border-info/20 px-3 py-2 text-xs text-info">
-                Sistem akan otomatis memilih rack &amp; pallet terbaik (FIFO). Tidak perlu scan pallet di tahap ini.
+
+            {createSuccess ? (
+              /* ── Success state ── */
+              <div className="px-5 py-5 space-y-4">
+                <div className="flex items-center gap-2 text-success">
+                  <CheckCircle2 size={20} />
+                  <span className="text-sm font-semibold">
+                    {createSuccess.length === 1
+                      ? 'Picking berhasil dibuat!'
+                      : `Picking berhasil dibuat — ${createSuccess.length} task dari ${createSuccess.length} pallet`}
+                  </span>
+                </div>
+
+                {/* Summary header row */}
+                <div className="rounded-lg border border-border bg-muted/30 divide-y divide-border text-sm">
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Picking ID</span>
+                    <span className="font-bold text-info font-tabular">{createSuccess[0].pickingId}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">SKU</span>
+                    <span className="font-semibold text-foreground">{createSuccess[0].skuNumber}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Total Qty</span>
+                    <span className="font-bold text-foreground font-tabular">
+                      {createSuccess.reduce((s, i) => s + i.requestedQty, 0)} units
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">Assigned To</span>
+                    <span className="font-semibold text-foreground">{createSuccess[0].assignedTo}</span>
+                  </div>
+                </div>
+
+                {/* Per-pallet breakdown */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pallet &amp; Bin</p>
+                  {createSuccess.map((item, idx) => (
+                    <div key={item.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 bg-white text-xs">
+                      <span className="text-muted-foreground font-medium">Task {idx + 1}</span>
+                      <span className="flex items-center gap-2 text-foreground">
+                        <span className="flex items-center gap-1 font-tabular"><Package size={11} />{item.suggestedPalletId || '—'}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className="flex items-center gap-1 font-tabular"><MapPin size={11} />{item.recommendedBin || '—'}</span>
+                        <span className="font-bold text-primary">{item.requestedQty} pcs</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      setCreateSuccess(null);
+                      setCreateForm({ skuNumber: '', requestedQty: '', assignedTo: '' });
+                      setSkuCheck(null);
+                    }}
+                    className="btn-ghost text-sm border border-border flex-1 justify-center"
+                  >
+                    Buat Lagi
+                  </button>
+                  <button onClick={handleCloseModal} className="btn-primary text-sm flex-1 justify-center">
+                    Selesai
+                  </button>
+                </div>
               </div>
-              {/* SKU Number */}
-              <div>
-                <label className="form-label text-xs">SKU Number <span className="text-danger">*</span></label>
-                <input
-                  type="text"
-                  placeholder="Scan atau ketik kode SKU..."
-                  value={createForm.skuNumber}
-                  onChange={e => setCreateForm(f => ({ ...f, skuNumber: e.target.value }))}
-                  className={`form-input text-sm ${createErrors.skuNumber ? 'border-danger' : ''}`}
-                />
-                {createErrors.skuNumber && <p className="text-xs text-danger mt-1">{createErrors.skuNumber}</p>}
-              </div>
-              {/* Requested Quantity */}
-              <div>
-                <label className="form-label text-xs">Requested Quantity <span className="text-danger">*</span></label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={createForm.requestedQty}
-                  onChange={e => setCreateForm(f => ({ ...f, requestedQty: e.target.value }))}
-                  className={`form-input text-sm ${createErrors.requestedQty ? 'border-danger' : ''}`}
-                />
-                {createErrors.requestedQty && <p className="text-xs text-danger mt-1">{createErrors.requestedQty}</p>}
-              </div>
-              {/* Assigned To */}
-              <div>
-                <label className="form-label text-xs">Assigned To <span className="text-danger">*</span></label>
-                <input
-                  type="text"
-                  placeholder="Operator name..."
-                  value={createForm.assignedTo}
-                  onChange={e => setCreateForm(f => ({ ...f, assignedTo: e.target.value }))}
-                  className={`form-input text-sm ${createErrors.assignedTo ? 'border-danger' : ''}`}
-                />
-                {createErrors.assignedTo && <p className="text-xs text-danger mt-1">{createErrors.assignedTo}</p>}
-              </div>
-            </div>
-            <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
-              <button onClick={handleCloseModal} disabled={submitting} className="btn-ghost text-sm border border-border">Cancel</button>
-              <button onClick={handleCreateSubmit} disabled={submitting} className="btn-primary text-sm disabled:opacity-50">
-                {submitting ? 'Creating...' : 'Create'}
-              </button>
-            </div>
+            ) : (
+              /* ── Form state ── */
+              <>
+                <div className="px-5 py-4 space-y-3">
+                  {/* Info banner */}
+                  <div className="rounded-lg bg-info/10 border border-info/20 px-3 py-2 text-xs text-info">
+                    Sistem akan otomatis memilih rack &amp; pallet terbaik (FIFO). Tidak perlu scan pallet di tahap ini.
+                  </div>
+
+                  {/* Submit error */}
+                  {createErrors.submit && (
+                    <div className="rounded-lg bg-danger/10 border border-danger/20 px-3 py-2 text-xs text-danger flex items-start gap-1.5">
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                      {createErrors.submit}
+                    </div>
+                  )}
+
+                  {/* SKU Number */}
+                  <div>
+                    <label className="form-label text-xs">SKU Number <span className="text-danger">*</span></label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Scan atau ketik kode SKU..."
+                        value={createForm.skuNumber}
+                        onChange={e => handleSkuChange(e.target.value)}
+                        className={`form-input text-sm pr-8 ${createErrors.skuNumber ? 'border-danger' : skuCheck && skuCheck !== 'not-found' ? 'border-success' : ''}`}
+                      />
+                      {skuChecking && (
+                        <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+                      )}
+                      {!skuChecking && skuCheck && skuCheck !== 'not-found' && (
+                        <CheckCircle2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-success" />
+                      )}
+                      {!skuChecking && skuCheck === 'not-found' && (
+                        <XCircle size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-danger" />
+                      )}
+                    </div>
+                    {createErrors.skuNumber && (
+                      <p className="text-xs text-danger mt-1 flex items-center gap-1"><AlertTriangle size={11} />{createErrors.skuNumber}</p>
+                    )}
+                    {!createErrors.skuNumber && skuCheck && skuCheck !== 'not-found' && (
+                      <p className="text-xs text-success mt-1 flex items-center gap-1">
+                        <CheckCircle2 size={11} />
+                        <strong>{skuCheck.skuName}</strong> — Stok tersedia: <strong>{skuCheck.availableQty} units</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Requested Quantity */}
+                  <div>
+                    <label className="form-label text-xs">Requested Quantity <span className="text-danger">*</span></label>
+                    {createErrors.requestedQty && (
+                      <p className="text-xs text-danger mb-1 flex items-center gap-1"><AlertTriangle size={11} />{createErrors.requestedQty}</p>
+                    )}
+                    <input
+                      type="number"
+                      placeholder="0"
+                      min={1}
+                      value={createForm.requestedQty}
+                      onChange={e => {
+                        setCreateForm(f => ({ ...f, requestedQty: e.target.value }));
+                        setCreateErrors(er => ({ ...er, requestedQty: '' }));
+                      }}
+                      className={`form-input text-sm ${createErrors.requestedQty ? 'border-danger' : ''}`}
+                    />
+                    {!createErrors.requestedQty && skuCheck && skuCheck !== 'not-found' && createForm.requestedQty && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <Package size={11} />
+                        Sistem akan otomatis split pallet jika dibutuhkan (FIFO)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Assigned To */}
+                  <div>
+                    <label className="form-label text-xs">Assigned To <span className="text-danger">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="Nama operator..."
+                      value={createForm.assignedTo}
+                      onChange={e => {
+                        setCreateForm(f => ({ ...f, assignedTo: e.target.value }));
+                        setCreateErrors(er => ({ ...er, assignedTo: '' }));
+                      }}
+                      className={`form-input text-sm ${createErrors.assignedTo ? 'border-danger' : ''}`}
+                    />
+                    {createErrors.assignedTo && <p className="text-xs text-danger mt-1 flex items-center gap-1"><AlertTriangle size={11} />{createErrors.assignedTo}</p>}
+                  </div>
+                </div>
+                <div className="px-5 py-4 border-t border-border flex justify-end gap-2">
+                  <button onClick={handleCloseModal} disabled={submitting} className="btn-ghost text-sm border border-border">Cancel</button>
+                  <button
+                    onClick={handleCreateSubmit}
+                    disabled={submitting || skuChecking}
+                    className="btn-primary text-sm disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {submitting && <Loader2 size={13} className="animate-spin" />}
+                    {submitting ? 'Membuat...' : 'Buat Picking'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -1,5 +1,20 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
 
+function getToken(): string {
+  try {
+    const stored = localStorage.getItem('syntera_auth_user');
+    if (!stored) return '';
+    return (JSON.parse(stored) as { token?: string })?.token ?? '';
+  } catch { return ''; }
+}
+
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${getToken()}`,
+  };
+}
+
 export interface AdjustmentSubmitRequest {
   SKUId?: number;
   SKUCode: string;
@@ -63,7 +78,7 @@ export interface ApprovalResult {
 export async function submitAdjustment(request: AdjustmentSubmitRequest): Promise<AdjustmentSubmitResponse> {
   const response = await fetch(`${API_BASE_URL}/inventoryadjustment`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(request),
   });
 
@@ -76,7 +91,9 @@ export async function submitAdjustment(request: AdjustmentSubmitRequest): Promis
 }
 
 export async function loadAdjustmentHistory(): Promise<AdjustmentHistoryResult[]> {
-  const response = await fetch(`${API_BASE_URL}/inventoryadjustment`);
+  const response = await fetch(`${API_BASE_URL}/inventoryadjustment`, {
+    headers: authHeaders(),
+  });
   if (!response.ok) throw new Error('Unable to load adjustment history.');
   const payload = await response.json();
   return Array.isArray(payload?.data) ? (payload.data as AdjustmentHistoryResult[]) : [];
@@ -85,7 +102,7 @@ export async function loadAdjustmentHistory(): Promise<AdjustmentHistoryResult[]
 export async function approveAdjustment(id: number, approvedBy: number): Promise<ApprovalResult> {
   const response = await fetch(`${API_BASE_URL}/inventoryadjustment/${id}/approve`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ approvedBy }),
   });
 
@@ -104,7 +121,7 @@ export async function rejectAdjustment(
 ): Promise<ApprovalResult> {
   const response = await fetch(`${API_BASE_URL}/inventoryadjustment/${id}/reject`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ rejectedBy, rejectionReason }),
   });
 

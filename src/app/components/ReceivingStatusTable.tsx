@@ -29,7 +29,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const ITEMS_PER_PAGE = 6;
 
-export default function ReceivingStatusTable() {
+export default function ReceivingStatusTable({ refreshKey = 0 }: { refreshKey?: number }) {
   const [records, setRecords] = useState<ReceivingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,11 +37,21 @@ export default function ReceivingStatusTable() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
 
+  const getToken = () => {
+    try {
+      const stored = localStorage.getItem('syntera_auth_user');
+      if (!stored) return '';
+      return (JSON.parse(stored) as { token?: string })?.token ?? '';
+    } catch { return ''; }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/receiving`);
+      const res = await fetch(`${API_BASE_URL}/receiving`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       setRecords(Array.isArray(payload?.data) ? payload.data : []);
@@ -53,7 +63,7 @@ export default function ReceivingStatusTable() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   const filtered = records.filter(r => {
     const q = search.toLowerCase();
